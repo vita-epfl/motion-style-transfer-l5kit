@@ -55,23 +55,24 @@ raster_params:
 train_data_loader:
   key: "scenes/train.zarr"
   # ratio: 0.000700
-  ratio: 1
+  ratio: 1.0
   step: 5
-  epochs: 3
+  epochs: 15
   batch_size: 32
   shuffle: True
-  num_workers: 4
+  num_workers: 12
   perturb_probability: 0.5
   w_decay: 0.0
   # scheme: "weighted_reward"
   # scheme: "default"
   # scheme: "weighted_sampling"
   # scheme: "group_dro"
-  # scheme: "vrex"
-  scheme: "vrex_batch"
+  scheme: "vrex"
+  # scheme: "vrex_batch"
   # scheduler: "default"
   scheduler: "one_cycle"
-  group_type: "missions"
+  # group_type: "missions"
+  group_type: "turns"
   vrex_penalty: 1.0
   dro_step_size: 0.01
   dro_normalize: False
@@ -87,8 +88,8 @@ val_data_loader:
 ## Train params
 train_params:
   seed: 42
-  checkpoint_every_n_epochs: 3000
-  eval_every_n_epochs: 4000
+  checkpoint_every_n_epochs: 1
+  eval_every_n_epochs: 4
   # output_name: "drivenet_h0_p05_default_schedule_step5_full"
   # output_name: "drivenet_h0_p05_onecycle_schedule_step5_wt_rew_full"
   # output_name: "drivenet_h0_p05_onecycle_schedule_step5_wt_samp_full"
@@ -98,7 +99,7 @@ train_params:
   # output_name: "drivenet_h0_p05_onecycle_schedule_step5_vrex_50epochs_pen03"
   # output_name: "drivenet_h0_p05_onecycle_schedule_step5_wt_sample_cluster_check"
   # output_name: "drivenet_h0_p05_onecycle_schedule_step5_jit_r18"
-  output_name: "DEL"
+  output_name: "simple_cnn_vrex_pen1"
   # max_num_steps: 2000000
   log_relative: True
   save_relative: True

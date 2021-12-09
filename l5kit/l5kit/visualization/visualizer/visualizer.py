@@ -3,7 +3,7 @@ from typing import Any, DefaultDict, Dict, List, Set, Tuple
 
 import bokeh.io
 import bokeh.plotting
-import geckodriver_autoinstaller
+# import geckodriver_autoinstaller
 import numpy as np
 from bokeh.layouts import column, LayoutDOM
 from bokeh.models import CustomJS, HoverTool, Slider
@@ -13,7 +13,7 @@ from l5kit.visualization.visualizer.common import (AgentVisualization, CWVisuali
                                                    FrameVisualization, LaneVisualization, TrajectoryVisualization)
 
 
-geckodriver_autoinstaller.install()
+# geckodriver_autoinstaller.install()
 
 
 def _visualization_list_to_dict(visualisation_list: List[Any], null_el: Any) -> Dict[str, Any]:

@@ -49,12 +49,14 @@ cfg = load_config_data(str(path_dro / "drivenet_config.yaml"))
 
 # Get Groups
 # scene_id_to_type_val_path = str(path_l5kit / "dataset_metadata/validate_turns_metadata.csv")
-scene_id_to_type_val_path = str(path_l5kit / "dataset_metadata/val_missions.csv")
+# scene_id_to_type_val_path = str(path_l5kit / "dataset_metadata/val_missions.csv")
 
 if cfg["train_data_loader"]["group_type"] == 'turns':
     scene_id_to_type_mapping_file = str(path_l5kit / "dataset_metadata/train_turns_metadata.csv")
+    scene_id_to_type_val_path = str(path_l5kit / "dataset_metadata/validate_turns_metadata.csv")
 elif cfg["train_data_loader"]["group_type"] == 'missions':
     scene_id_to_type_mapping_file = str(path_l5kit / "dataset_metadata/train_missions.csv")
+    scene_id_to_type_val_path = str(path_l5kit / "dataset_metadata/val_missions.csv")
 
 cluster_mean_path = str(path_l5kit / "dataset_metadata/cluster_means.npy")
 
