@@ -4,11 +4,12 @@ from typing import Dict, List
 import torch
 import torch.nn as nn
 from torchvision.models.resnet import resnet18, resnet50
+import torchvision.transforms as T
 
 from l5kit.environment import models
 
 
-class RasterizedPlanningModel(nn.Module):
+class TransformerModel(nn.Module):
     """Raster-based planning model."""
 
     def __init__(
@@ -19,6 +20,7 @@ class RasterizedPlanningModel(nn.Module):
         weights_scaling: List[float],
         criterion: nn.Module,
         pretrained: bool = True,
+        transform: bool = False,
     ) -> None:
         """Initializes the planning model.
 
@@ -40,36 +42,52 @@ class RasterizedPlanningModel(nn.Module):
         if pretrained and self.num_input_channels != 3:
             warnings.warn("There is no pre-trained model with num_in_channels != 3, first layer will be reset")
 
-        if model_arch == "resnet18":
-            self.model = resnet18(pretrained=pretrained)
-            self.model.fc = nn.Linear(in_features=512, out_features=num_targets)
-        elif model_arch == "resnet50":
-            self.model = resnet50(pretrained=pretrained)
-            self.model.fc = nn.Linear(in_features=2048, out_features=num_targets)
-        elif model_arch == "simple_cnn":
-            self.model = models.SimpleCNN_GN(self.num_input_channels, num_targets)
-        else:
-            raise NotImplementedError(f"Model arch {model_arch} unknown")
+        # Model_arch == "vit_base_patch16_224":
+        from timm import create_model
+        import torchvision.transforms as T
 
-        if model_arch in {"resnet18", "resnet50"} and self.num_input_channels != 3:
-            self.model.conv1 = nn.Conv2d(
-                in_channels=self.num_input_channels,
-                out_channels=64,
-                kernel_size=(7, 7),
-                stride=(2, 2),
-                padding=(3, 3),
-                bias=False,
-            )
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        if self.model_arch == "vit_tiny":
+            self.model = create_model('vit_tiny_patch16_224', pretrained=pretrained).to(device)
+            if self.num_input_channels!=3:
+                self.model.patch_embed.proj = nn.Conv2d(self.num_input_channels, 192, kernel_size=(16, 16), stride=(16, 16))
+            self.model.head = nn.Linear(in_features= 192 , out_features=num_targets)
+        elif self.model_arch == "vit_small":
+            self.model = create_model('vit_small_patch16_224', pretrained=pretrained).to(device)
+            if self.num_input_channels!=3:
+                self.model.patch_embed.proj = nn.Conv2d(self.num_input_channels, 384, kernel_size=(16, 16), stride=(16, 16))
+            self.model.head = nn.Linear(in_features= 384 , out_features=num_targets)
+        elif self.model_arch == "vit_base":
+            self.model = create_model('vit_base_patch16_224', pretrained=pretrained).to(device)
+            if self.num_input_channels!=3:
+                self.model.patch_embed.proj = nn.Conv2d(self.num_input_channels, 768, kernel_size=(16, 16), stride=(16, 16))
+            self.model.head = nn.Linear(in_features= 768 , out_features=num_targets)
+        else:
+            raise NotImplementedError
+
+        # IMG_SIZE = (224, 224)
+        self.transform = transform
+        # NORMALIZE_MEAN = (0.5, 0.5, 0.5)
+        # NORMALIZE_STD = (0.5, 0.5, 0.5)
+        NORMALIZE_MEAN = tuple([0.5] * self.num_input_channels)
+        NORMALIZE_STD = tuple([0.5] * self.num_input_channels)
+        transforms = [
+                    # T.Resize(IMG_SIZE),
+                    # T.ToTensor(),
+                    T.Normalize(NORMALIZE_MEAN, NORMALIZE_STD),
+                    ]
+        self.transforms = T.Compose(transforms)
 
     def forward(self, data_batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         # [batch_size, channels, height, width]
         image_batch = data_batch["image"]
+        if self.transform:
+            image_batch = self.transforms(image_batch)
+        # import pdb; pdb.set_trace()
         # [batch_size, num_steps * 2]
         outputs = self.model(image_batch)
         batch_size = len(data_batch["image"])
 
-        # Input Size: BS x N_C x H x W
-        # Output Size: BS x (3 * T_S); 3 --> X, Y, Yaw
         if self.training:
             if self.criterion is None:
                 raise NotImplementedError("Loss function is undefined.")
