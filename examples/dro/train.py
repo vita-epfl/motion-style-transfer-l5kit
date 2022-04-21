@@ -27,7 +27,8 @@ from tqdm import tqdm
 
 from drivenet_eval import eval_model
 from dro_utils import (append_group_index, append_group_index_cluster, append_reward_scaling,
-                       get_sample_weights, get_sample_weights_clusters, GroupBatchSampler, subset_and_subsample)
+                       get_sample_weights, get_sample_weights_clusters, GroupBatchSampler, subset_and_subsample,
+                       subset_and_subsample_upper)
 from group_dro_loss import LossComputer
 from vrex_loss import VRexLossComputer
 
@@ -56,6 +57,17 @@ if cfg["train_data_loader"]["group_type"] == 'turns':
 elif cfg["train_data_loader"]["group_type"] == 'missions':
     scene_id_to_type_mapping_file = str(path_l5kit / "dataset_metadata/train_missions.csv")
     scene_id_to_type_val_path = str(path_l5kit / "dataset_metadata/val_missions.csv")
+elif cfg["train_data_loader"]["group_type"] == 'split':
+    scene_id_to_type_mapping_file = str(path_l5kit / "dataset_metadata/train_split_1350.csv")
+    scene_id_to_type_val_path = str(path_l5kit / "dataset_metadata/val_split_1350.csv")
+
+# Group Structures
+scene_type_to_id_dict = get_scene_types_as_dict(scene_id_to_type_mapping_file)
+scene_id_to_type_list = get_scene_types(scene_id_to_type_mapping_file)
+num_groups = len(scene_type_to_id_dict)
+group_counts = torch.IntTensor([len(v) for k, v in scene_type_to_id_dict.items()])
+group_str = [k for k in scene_type_to_id_dict.keys()]
+reward_scale = {"straight": 1.0, "left": 19.5, "right": 16.6}
 
 # Logging and Saving
 output_name = cfg["train_params"]["output_name"]
@@ -97,16 +109,16 @@ train_cfg = cfg["train_data_loader"]
 train_scheme = train_cfg["scheme"]
 group_type = train_cfg["group_type"]
 num_epochs = train_cfg["epochs"]
+split_train = train_cfg["split"]
 # Sub-sample (for faster training)
-train_dataset = subset_and_subsample(train_dataset_original, ratio=train_cfg['ratio'], step=train_cfg['step'])
-
-# Group Structures
-scene_type_to_id_dict = get_scene_types_as_dict(scene_id_to_type_mapping_file)
-scene_id_to_type_list = get_scene_types(scene_id_to_type_mapping_file)
-num_groups = len(scene_type_to_id_dict)
-group_counts = torch.IntTensor([len(v) for k, v in scene_type_to_id_dict.items()])
-group_str = [k for k in scene_type_to_id_dict.keys()]
-reward_scale = {"straight": 1.0, "left": 19.5, "right": 16.6}
+if not split_train:
+    train_dataset = subset_and_subsample(train_dataset_original, ratio=train_cfg['ratio'], step=train_cfg['step'])
+else:
+    # Split data into "upper" and "lower" for PETuning
+    split_ids = scene_type_to_id_dict['upper']
+    train_dataset = subset_and_subsample_upper(train_dataset_original, ratio=train_cfg['ratio'], step=train_cfg['step'],
+                                               scene_id_to_type_list=scene_id_to_type_list,
+                                               cumulative_sizes=cumulative_sizes)
 
 # Validation Dataset (For evaluation)
 eval_cfg = cfg["val_data_loader"]

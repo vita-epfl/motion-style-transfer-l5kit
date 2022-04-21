@@ -66,10 +66,11 @@ train_data_loader:
   w_decay: 0.0
   scheme: "default" # "weighted_reward", "weighted_sampling", "group_dro", "vrex_batch", "vrex"
   scheduler: "one_cycle" #  "default"
-  group_type: "turns" # "missions"
+  group_type: "split" # "missions", "turns"
   vrex_penalty: 1.0
   dro_step_size: 0.01
   dro_normalize: False
+  split: False
 
 val_data_loader:
   key: "scenes/validate.zarr"
