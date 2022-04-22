@@ -7,7 +7,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 import os
 
-from timm.utils.misc import natural_key
+from l5kit.timm.utils.misc import natural_key
 
 from .parser import Parser
 from .class_map import load_class_map
