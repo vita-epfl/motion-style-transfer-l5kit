@@ -43,7 +43,7 @@ class TransformerModel(nn.Module):
             warnings.warn("There is no pre-trained model with num_in_channels != 3, first layer will be reset")
 
         # Model_arch == "vit_base_patch16_224":
-        from timm import create_model
+        from l5kit.timm import create_model
         import torchvision.transforms as T
 
         device = 'cuda' if torch.cuda.is_available() else 'cpu'

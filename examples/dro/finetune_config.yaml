@@ -59,9 +59,9 @@ train_data_loader:
   ratio: 1.0
   step: 5 # 5
   epochs: 15 # 15
-  batch_size: 128
+  batch_size: 16
   shuffle: True
-  num_workers: 20
+  num_workers: 8
   perturb_probability: 0.5
   w_decay: 0.0
   scheme: "default" # "weighted_reward", "weighted_sampling", "group_dro", "vrex_batch", "vrex"
@@ -85,7 +85,14 @@ val_data_loader:
 train_params:
   seed: 42
   checkpoint_every_n_epochs: 10
-  eval_every_n_epochs: 4
-  output_name: "vit_tiny_split_lower"
+  eval_every_n_epochs: 1
   log_relative: True
   save_relative: True
+
+###################
+## Finetune params
+finetune_params:
+  lr: 5.0E-4
+  model_path: "examples/dro/checkpoints/vit_tiny_split_73140_steps.pth"
+  strategy: "all"
+  output_name: "vit_tiny_split_ft_lr5e4_all"

@@ -77,9 +77,9 @@ def subset_and_subsample(dataset: EgoDataset, ratio: float, step: int) -> Subset
     return Subset(dataset, scene_samples)
 
 
-def subset_and_subsample_upper(dataset: EgoDataset, ratio: float, step: int,
-                               scene_id_to_type_list: Dict[int, List[str]], cumulative_sizes: np.array) -> Subset:
-
+def subset_and_subsample_filtered(dataset: EgoDataset, ratio: float, step: int,
+                                  scene_id_to_type_list: Dict[int, List[str]], cumulative_sizes: np.array,
+                                  filter_type: str) -> Subset:
     # Loop over scenes
     total_frames = cumulative_sizes[-1]
     cumulative_sizes = np.insert(cumulative_sizes, 0, 0)
@@ -89,7 +89,7 @@ def subset_and_subsample_upper(dataset: EgoDataset, ratio: float, step: int,
         start_frame = cumulative_sizes[index]
         end_frame = cumulative_sizes[index+1]
         len_scene = end_frame - start_frame
-        if scene_id_to_type_list[index][0] == 'upper':
+        if scene_id_to_type_list[index][0] == filter_type:
             filter_frame_ids[start_frame : end_frame] = [True] * len_scene
     filtered_frames = [i for i, x in enumerate(filter_frame_ids) if x]
 

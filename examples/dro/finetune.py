@@ -32,6 +32,58 @@ from dro_utils import (append_group_index, append_group_index_cluster, append_re
 from group_dro_loss import LossComputer
 from vrex_loss import VRexLossComputer
 
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning) 
+warnings.filterwarnings("ignore", category=RuntimeWarning) 
+
+def load_model(model, model_path):
+    print("Loading Model: ", model_path)
+    ckpt = torch.load(model_path, map_location=torch.device('cpu'))
+    if list(ckpt.keys())[0][:6] == "module":
+        ckpt = {k[7:]: v for k,v in ckpt.items()}
+    model.load_state_dict(ckpt)
+    print("Model Loaded")
+    return model
+
+def freeze_all_but_head(model):
+    for name, param in model.named_parameters():
+        param.requires_grad = False
+
+    # Unfreeeze head
+    for name, param in model.model.head.named_parameters():
+        param.requires_grad = True
+
+    # for name, param in model.named_parameters():
+    #     print(name, param.requires_grad)
+
+def freeze_all_but_head(model):
+    for name, param in model.named_parameters():
+        param.requires_grad = False
+
+    # Unfreeeze head
+    for name, param in model.model.head.named_parameters():
+        param.requires_grad = True
+
+    # for name, param in model.named_parameters():
+    #     print(name, param.requires_grad)
+
+def freeze_all_but_LN_and_head(model):
+    for name, param in model.named_parameters():
+        param.requires_grad = False
+
+    # Unfreeeze head
+    for name, param in model.model.head.named_parameters():
+        param.requires_grad = True
+
+    # Unfreeze LayerNorm
+    for name, param in model.named_parameters():
+        if 'norm' in name: 
+            param.requires_grad = True
+
+    # for name, param in model.named_parameters():
+    #     print(name, param.requires_grad)
+
+
 # Dataset is assumed to be on the folder specified
 # in the L5KIT_DATA_FOLDER environment variable
 # Please set the L5KIT_DATA_FOLDER environment variable
@@ -48,7 +100,7 @@ path_dro = Path(__file__).parent
 
 dm = LocalDataManager(None)
 # get config
-cfg = load_config_data(str(path_dro / "drivenet_config.yaml"))
+cfg = load_config_data(str(path_dro / "finetune_config.yaml"))
 
 # Get Groups (e.g. Turns, Mission)
 if cfg["train_data_loader"]["group_type"] == 'turns':
@@ -70,7 +122,7 @@ group_str = [k for k in scene_type_to_id_dict.keys()]
 reward_scale = {"straight": 1.0, "left": 19.5, "right": 16.6}
 
 # Logging and Saving
-output_name = cfg["train_params"]["output_name"]
+output_name = cfg["finetune_params"]["output_name"]
 if cfg["train_params"]["save_relative"]:
     save_path = path_dro / "checkpoints"
 else:
@@ -115,7 +167,8 @@ if not split_train:
     train_dataset = subset_and_subsample(train_dataset_original, ratio=train_cfg['ratio'], step=train_cfg['step'])
 else:
     print("Splitting Data")
-    filter_type = train_cfg["filter_type"]
+    # Switch filter type when finetuning
+    filter_type = "lower" if train_cfg["filter_type"] == "upper" else "upper"
     print("Filter Type: ", filter_type)
     # Split data into "upper" and "lower" for PETuning
     train_dataset = subset_and_subsample_filtered(train_dataset_original, ratio=train_cfg['ratio'], step=train_cfg['step'],
@@ -152,9 +205,25 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 print("Number of Params: ", count_parameters(model))
 
+model_path = cfg["finetune_params"]["model_path"]
+model = load_model(model, model_path)
+
+if cfg["finetune_params"]["strategy"] == 'head':
+    print("Finetuning Head Classifier")
+    freeze_all_but_head(model)
+elif cfg["finetune_params"]["strategy"] == 'norm':
+    print("Finetuning Layer Normalization and Classifier")
+    freeze_all_but_LN_and_head(model)
+elif cfg["finetune_params"]["strategy"] == 'all':
+    print("Finetuning whole model")
+    pass
+else:
+    raise ValueError
+
 model = nn.DataParallel(model)
 model = model.to(device)
-optimizer = optim.Adam(model.parameters(), lr=5e-4, weight_decay=train_cfg["w_decay"])
+optimizer = optim.Adam(model.parameters(), lr=cfg["finetune_params"]["lr"], weight_decay=train_cfg["w_decay"])
+print("LR: ", cfg["finetune_params"]["lr"])
 
 # Train Loader & Schedular
 g = torch.Generator()
@@ -166,12 +235,20 @@ scheduler = torch.optim.lr_scheduler.OneCycleLR(
     optimizer,
     epochs=num_epochs,
     steps_per_epoch=len(train_dataloader),
-    max_lr=5e-4,
+    max_lr=cfg["finetune_params"]["lr"],
     pct_start=0.3)
+
+# Init Eval
+eval_model(model, eval_dataset, logger, "eval", iter_num=0, num_scenes_to_unroll=100,
+           enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path)
 
 # Train
 model.train()
 torch.set_grad_enabled(True)
+
+# for name, param in model.named_parameters():
+#     print(name, param.requires_grad)
+# exit()
 total_steps = 0
 for epoch in range(train_cfg['epochs']):
     print(epoch , "/", train_cfg['epochs'])

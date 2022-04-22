@@ -56,7 +56,7 @@ elif cfg["model_params"]["model_architecture"] in {"vit_tiny", "vit_small", "vit
         transform=cfg["model_params"]["transform"])
 
 ckpt = torch.load(model_path, map_location=torch.device('cpu'))
-if ckpt.keys()[:6] == "module":
+if list(ckpt.keys())[0][:6] == "module":
     ckpt = {k[7:]: v for k,v in ckpt.items()}
 model.load_state_dict(ckpt)
 model = model.to(device)
