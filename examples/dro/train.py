@@ -114,8 +114,8 @@ split_train = train_cfg["split"]
 if not split_train:
     train_dataset = subset_and_subsample(train_dataset_original, ratio=train_cfg['ratio'], step=train_cfg['step'])
 else:
+    print("Splitting Data")
     # Split data into "upper" and "lower" for PETuning
-    split_ids = scene_type_to_id_dict['upper']
     train_dataset = subset_and_subsample_upper(train_dataset_original, ratio=train_cfg['ratio'], step=train_cfg['step'],
                                                scene_id_to_type_list=scene_id_to_type_list,
                                                cumulative_sizes=cumulative_sizes)

@@ -49,29 +49,32 @@ def eval_model(model: torch.nn.Module, dataset: EgoDataset, logger: Logger, d_se
     metric_set = CLEMetricSet()
 
     # unroll
-    # batch_unroll = 10
-    # for start_idx in range(0, num_scenes_to_unroll, batch_unroll):
-    #     print("Start index", start_idx)
-    #     end_idx = min(num_scenes_to_unroll, start_idx + batch_unroll)
-    #     scenes_to_unroll = list(range(start_idx, end_idx))
-    #     sim_outs = sim_loop.unroll(scenes_to_unroll)
-    #     metric_set.evaluator.evaluate(sim_outs)
-    # set_loky_pickler("dill")
     batch_unroll = 100
-    def predict_scene(start_idx):
-        with torch.no_grad():
-            print(start_idx)
-            end_idx = min(num_scenes_to_unroll, start_idx + batch_unroll)
-            scenes_to_unroll = list(range(start_idx, end_idx))
-            sim_outs = sim_loop.unroll(scenes_to_unroll)
-            return sim_outs
-
-    sim_outs_list = Parallel(n_jobs=20, backend="threading")(delayed(predict_scene)(start_idx)
-                        for start_idx in range(0, num_scenes_to_unroll, batch_unroll))
-    # sim_outs_list = Parallel(n_jobs=12)(delayed(predict_scene)(start_idx)
-    #                     for start_idx in range(0, num_scenes_to_unroll, batch_unroll))
-    for sim_outs in sim_outs_list:
+    for start_idx in range(0, num_scenes_to_unroll, batch_unroll):
+        print("Start index", start_idx)
+        end_idx = min(num_scenes_to_unroll, start_idx + batch_unroll)
+        scenes_to_unroll = list(range(start_idx, end_idx))
+        sim_outs = sim_loop.unroll(scenes_to_unroll)
         metric_set.evaluator.evaluate(sim_outs)
+
+    ## Job Lib ################################################################
+    # set_loky_pickler("dill")
+    # batch_unroll = 100
+    # def predict_scene(start_idx):
+    #     with torch.no_grad():
+    #         print(start_idx)
+    #         end_idx = min(num_scenes_to_unroll, start_idx + batch_unroll)
+    #         scenes_to_unroll = list(range(start_idx, end_idx))
+    #         sim_outs = sim_loop.unroll(scenes_to_unroll)
+    #         return sim_outs
+
+    # sim_outs_list = Parallel(n_jobs=20, backend="threading")(delayed(predict_scene)(start_idx)
+    #                     for start_idx in range(0, num_scenes_to_unroll, batch_unroll))
+    # # sim_outs_list = Parallel(n_jobs=12)(delayed(predict_scene)(start_idx)
+    # #                     for start_idx in range(0, num_scenes_to_unroll, batch_unroll))
+    # for sim_outs in sim_outs_list:
+    #     metric_set.evaluator.evaluate(sim_outs)
+    ###############################################################################################
 
     # Aggregate metrics (ADE, FDE)
     ade, fde = L5KitEvalCallback.compute_ade_fde(metric_set)
