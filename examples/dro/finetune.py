@@ -17,6 +17,7 @@ from l5kit.environment.utils import get_scene_types, get_scene_types_as_dict
 from l5kit.kinematic import AckermanPerturbation
 from l5kit.planning.rasterized.model import RasterizedPlanningModel
 from l5kit.planning.rasterized.xmer import TransformerModel
+from l5kit.planning.rasterized.xmer_adapter import TransformerAdapterModel
 from l5kit.random import GaussianRandomGenerator
 from l5kit.rasterization import build_rasterizer
 from stable_baselines3.common import utils
@@ -35,6 +36,65 @@ from vrex_loss import VRexLossComputer
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning) 
 warnings.filterwarnings("ignore", category=RuntimeWarning) 
+
+
+def load_model_dhruti(model, model_path):
+    print("Loading Model: ", model_path)
+    ckpt = torch.load(model_path, map_location=torch.device('cpu'))
+
+    if list(ckpt.keys())[0][:6] == "module":
+        ckpt = {k[7:]: v for k,v in ckpt.items()}
+    
+    import copy
+    ckpt_new = copy.deepcopy(ckpt)
+    to_change = [k for k in ckpt.keys() if 'qkv' in k]
+    for k in ckpt.keys():
+        if k not in to_change:
+            ckpt_new[k] = ckpt[k]
+            continue
+        if k[-6:] == 'weight':
+            curr_weight = ckpt[k]
+            ckpt_new[k[:-10]+'to_q.weight'] = curr_weight[:len(curr_weight)//3]
+            ckpt_new[k[:-10]+'to_kv.weight'] = curr_weight[len(curr_weight)//3:]
+        elif k[-4:] == 'bias':
+            curr_weight = ckpt[k]
+            ckpt_new[k[:-8]+'to_q.bias'] = curr_weight[:len(curr_weight)//3]
+            ckpt_new[k[:-8]+'to_kv.bias'] = curr_weight[len(curr_weight)//3:]
+
+    model.load_state_dict(ckpt_new)
+    print("Model Loaded")
+    return model
+
+
+def load_adaptor_model(model, model_path):
+    print("Loading Model: ", model_path)
+    ckpt = torch.load(model_path, map_location=torch.device('cpu'))
+
+    if list(ckpt.keys())[0][:6] == "module":
+        ckpt = {k[7:]: v for k,v in ckpt.items()}
+
+    ckpt = {k[6:]: v for k,v in ckpt.items() if k[:6] == 'model.'}
+
+    import copy
+    ckpt_new = copy.deepcopy(ckpt)
+    to_change = [k for k in ckpt.keys() if 'qkv' in k]
+    for k in ckpt.keys():
+        if k not in to_change:
+            ckpt_new[k] = ckpt[k]
+            continue
+        if k[-6:] == 'weight':
+            curr_weight = ckpt[k]
+            ckpt_new[k[:-10]+'to_q.weight'] = curr_weight[:len(curr_weight)//3]
+            ckpt_new[k[:-10]+'to_kv.weight'] = curr_weight[len(curr_weight)//3:]
+        elif k[-4:] == 'bias':
+            curr_weight = ckpt[k]
+            ckpt_new[k[:-8]+'to_q.bias'] = curr_weight[:len(curr_weight)//3]
+            ckpt_new[k[:-8]+'to_kv.bias'] = curr_weight[len(curr_weight)//3:]
+
+    model.load_state_dict(ckpt_new)
+    print("Model Loaded")
+    return model
+
 
 def load_model(model, model_path):
     print("Loading Model: ", model_path)
@@ -192,21 +252,34 @@ if cfg["model_params"]["model_architecture"] in {"resnet18", "resnet50"}:
         weights_scaling=[1., 1., 1.],
         criterion=nn.MSELoss(reduction="none"),)
 elif cfg["model_params"]["model_architecture"] in {"vit_tiny", "vit_small", "vit_base"}:
-    print("Xmer Model")
-    model = TransformerModel(
-        model_arch=cfg["model_params"]["model_architecture"],
-        num_input_channels=rasterizer.num_channels(),
-        num_targets=3 * cfg["model_params"]["future_num_frames"],  # X, Y, Yaw * number of future states
-        weights_scaling=[1., 1., 1.],
-        criterion=nn.MSELoss(reduction="none"),
-        transform=cfg["model_params"]["transform"])
+    if cfg["finetune_params"]["strategy"] == 'adapter':
+        print("Adapter Model")
+        model = TransformerAdapterModel(
+            model_arch=cfg["model_params"]["model_architecture"],
+            num_input_channels=rasterizer.num_channels(),
+            num_targets=3 * cfg["model_params"]["future_num_frames"],  # X, Y, Yaw * number of future states
+            weights_scaling=[1., 1., 1.],
+            criterion=nn.MSELoss(reduction="none"),
+            transform=cfg["model_params"]["transform"])
+    else:
+        print("Xmer Model")
+        model = TransformerModel(
+            model_arch=cfg["model_params"]["model_architecture"],
+            num_input_channels=rasterizer.num_channels(),
+            num_targets=3 * cfg["model_params"]["future_num_frames"],  # X, Y, Yaw * number of future states
+            weights_scaling=[1., 1., 1.],
+            criterion=nn.MSELoss(reduction="none"),
+            transform=cfg["model_params"]["transform"])
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 print("Number of Params: ", count_parameters(model))
 
 model_path = cfg["finetune_params"]["model_path"]
-model = load_model(model, model_path)
+if cfg["finetune_params"]["strategy"] == 'adapter':
+    model.model.vit = load_adaptor_model(model.model.vit, model_path)
+else:
+    model = load_model(model, model_path)
 
 if cfg["finetune_params"]["strategy"] == 'head':
     print("Finetuning Head Classifier")
@@ -217,10 +290,13 @@ elif cfg["finetune_params"]["strategy"] == 'norm':
 elif cfg["finetune_params"]["strategy"] == 'all':
     print("Finetuning whole model")
     pass
+elif cfg["finetune_params"]["strategy"] == 'adapter':
+    print("Adapter Tuning")
+    pass
 else:
     raise ValueError
 
-model = nn.DataParallel(model)
+# model = nn.DataParallel(model)
 model = model.to(device)
 optimizer = optim.Adam(model.parameters(), lr=cfg["finetune_params"]["lr"], weight_decay=train_cfg["w_decay"])
 print("LR: ", cfg["finetune_params"]["lr"])
