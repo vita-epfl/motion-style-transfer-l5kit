@@ -260,7 +260,8 @@ elif cfg["model_params"]["model_architecture"] in {"vit_tiny", "vit_small", "vit
             num_targets=3 * cfg["model_params"]["future_num_frames"],  # X, Y, Yaw * number of future states
             weights_scaling=[1., 1., 1.],
             criterion=nn.MSELoss(reduction="none"),
-            transform=cfg["model_params"]["transform"])
+            transform=cfg["model_params"]["transform"],
+            num_memories_per_layer=cfg["finetune_params"]["num_memory_cell"])
     else:
         print("Xmer Model")
         model = TransformerModel(
@@ -273,7 +274,6 @@ elif cfg["model_params"]["model_architecture"] in {"vit_tiny", "vit_small", "vit
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
-print("Number of Params: ", count_parameters(model))
 
 model_path = cfg["finetune_params"]["model_path"]
 if cfg["finetune_params"]["strategy"] == 'adapter':
@@ -295,6 +295,8 @@ elif cfg["finetune_params"]["strategy"] == 'adapter':
     pass
 else:
     raise ValueError
+
+print("Number of Params: ", count_parameters(model))
 
 # model = nn.DataParallel(model)
 model = model.to(device)
