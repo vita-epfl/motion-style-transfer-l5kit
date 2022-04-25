@@ -138,7 +138,7 @@ if cfg["model_params"]["model_architecture"] in {"resnet18", "resnet50"}:
         num_targets=3 * cfg["model_params"]["future_num_frames"],  # X, Y, Yaw * number of future states
         weights_scaling=[1., 1., 1.],
         criterion=nn.MSELoss(reduction="none"),)
-elif cfg["model_params"]["model_architecture"] in {"vit_tiny", "vit_small", "vit_base"}:
+elif cfg["model_params"]["model_architecture"] in {"vit_tiny", "vit_small", "vit_base", "vit_small_32"}:
     print("Xmer Model")
     model = TransformerModel(
         model_arch=cfg["model_params"]["model_architecture"],

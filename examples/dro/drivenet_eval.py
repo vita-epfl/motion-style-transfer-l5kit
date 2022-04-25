@@ -32,7 +32,7 @@ def eval_model(model: torch.nn.Module, dataset: EgoDataset, logger: Logger, d_se
     :param enable_scene_type_aggregation: enable evaluation according to scene type
     :param scene_id_to_type_path: path to the csv file mapping scene id to scene type
     """
-    # model = torch.nn.DataParallel(model, device_ids=[0])
+    model = torch.nn.DataParallel(model, device_ids=[0])
     model.eval()
     torch.set_grad_enabled(False)
 
