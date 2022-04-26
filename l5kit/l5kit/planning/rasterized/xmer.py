@@ -52,7 +52,7 @@ class TransformerModel(nn.Module):
             if self.num_input_channels!=3:
                 self.model.patch_embed.proj = nn.Conv2d(self.num_input_channels, 192, kernel_size=(16, 16), stride=(16, 16))
             self.model.head = nn.Linear(in_features= 192 , out_features=num_targets)
-        if self.model_arch == "vit_small_32":
+        elif self.model_arch == "vit_small_32":
             self.model = create_model('vit_small_patch32_224', pretrained=pretrained).to(device)
             if self.num_input_channels!=3:
                 self.model.patch_embed.proj = nn.Conv2d(self.num_input_channels, 384, kernel_size=(32, 32), stride=(32, 32))

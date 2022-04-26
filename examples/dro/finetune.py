@@ -18,6 +18,7 @@ from l5kit.kinematic import AckermanPerturbation
 from l5kit.planning.rasterized.model import RasterizedPlanningModel
 from l5kit.planning.rasterized.xmer import TransformerModel
 from l5kit.planning.rasterized.xmer_adapter import TransformerAdapterModel
+from l5kit.planning.rasterized.xmer_adapter2 import TransformerAdapterModel2
 from l5kit.random import GaussianRandomGenerator
 from l5kit.rasterization import build_rasterizer
 from stable_baselines3.common import utils
@@ -38,35 +39,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning) 
 
 
-def load_model_dhruti(model, model_path):
-    print("Loading Model: ", model_path)
-    ckpt = torch.load(model_path, map_location=torch.device('cpu'))
-
-    if list(ckpt.keys())[0][:6] == "module":
-        ckpt = {k[7:]: v for k,v in ckpt.items()}
-    
-    import copy
-    ckpt_new = copy.deepcopy(ckpt)
-    to_change = [k for k in ckpt.keys() if 'qkv' in k]
-    for k in ckpt.keys():
-        if k not in to_change:
-            ckpt_new[k] = ckpt[k]
-            continue
-        if k[-6:] == 'weight':
-            curr_weight = ckpt[k]
-            ckpt_new[k[:-10]+'to_q.weight'] = curr_weight[:len(curr_weight)//3]
-            ckpt_new[k[:-10]+'to_kv.weight'] = curr_weight[len(curr_weight)//3:]
-        elif k[-4:] == 'bias':
-            curr_weight = ckpt[k]
-            ckpt_new[k[:-8]+'to_q.bias'] = curr_weight[:len(curr_weight)//3]
-            ckpt_new[k[:-8]+'to_kv.bias'] = curr_weight[len(curr_weight)//3:]
-
-    model.load_state_dict(ckpt_new)
-    print("Model Loaded")
-    return model
-
-
-def load_adaptor_model(model, model_path):
+def load_memory_model(model, model_path):
     print("Loading Model: ", model_path)
     ckpt = torch.load(model_path, map_location=torch.device('cpu'))
 
@@ -96,48 +69,57 @@ def load_adaptor_model(model, model_path):
     return model
 
 
-def load_model(model, model_path):
+def load_model(model, model_path, load_strict=True):
     print("Loading Model: ", model_path)
     ckpt = torch.load(model_path, map_location=torch.device('cpu'))
     if list(ckpt.keys())[0][:6] == "module":
         ckpt = {k[7:]: v for k,v in ckpt.items()}
-    model.load_state_dict(ckpt)
+    model.load_state_dict(ckpt, strict=load_strict)
     print("Model Loaded")
     return model
 
 def freeze_all_but_head(model):
-    for name, param in model.named_parameters():
+    for _, param in model.named_parameters():
         param.requires_grad = False
 
     # Unfreeeze head
-    for name, param in model.model.head.named_parameters():
+    for _, param in model.model.head.named_parameters():
         param.requires_grad = True
 
     # for name, param in model.named_parameters():
     #     print(name, param.requires_grad)
 
-def freeze_all_but_head(model):
-    for name, param in model.named_parameters():
-        param.requires_grad = False
-
-    # Unfreeeze head
-    for name, param in model.model.head.named_parameters():
-        param.requires_grad = True
-
-    # for name, param in model.named_parameters():
-    #     print(name, param.requires_grad)
 
 def freeze_all_but_LN_and_head(model):
-    for name, param in model.named_parameters():
+    for _, param in model.named_parameters():
         param.requires_grad = False
 
     # Unfreeeze head
-    for name, param in model.model.head.named_parameters():
+    for _, param in model.model.head.named_parameters():
         param.requires_grad = True
 
     # Unfreeze LayerNorm
     for name, param in model.named_parameters():
-        if 'norm' in name: 
+        if 'norm' in name:
+            param.requires_grad = True
+
+    # for name, param in model.named_parameters():
+    #     print(name, param.requires_grad)
+
+
+def unfreeze_LN(model):
+    for name, param in model.named_parameters():
+        param.requires_grad = False
+
+    # Unfreeeze head
+    for name, param in model.model.head.named_parameters():
+        param.requires_grad = True
+
+    # Unfreeze LayerNorm and Adapter
+    for name, param in model.named_parameters():
+        if 'norm' in name:
+            param.requires_grad = True
+        if 'adapter' in name:
             param.requires_grad = True
 
     # for name, param in model.named_parameters():
@@ -252,8 +234,8 @@ if cfg["model_params"]["model_architecture"] in {"resnet18", "resnet50"}:
         weights_scaling=[1., 1., 1.],
         criterion=nn.MSELoss(reduction="none"),)
 elif cfg["model_params"]["model_architecture"] in {"vit_tiny", "vit_small", "vit_base"}:
-    if cfg["finetune_params"]["strategy"] == 'adapter':
-        print("Adapter Model")
+    if cfg["finetune_params"]["strategy"] == 'memory':
+        print("Learnable Memory Model")
         model = TransformerAdapterModel(
             model_arch=cfg["model_params"]["model_architecture"],
             num_input_channels=rasterizer.num_channels(),
@@ -262,6 +244,16 @@ elif cfg["model_params"]["model_architecture"] in {"vit_tiny", "vit_small", "vit
             criterion=nn.MSELoss(reduction="none"),
             transform=cfg["model_params"]["transform"],
             num_memories_per_layer=cfg["finetune_params"]["num_memory_cell"])
+    elif cfg["finetune_params"]["strategy"] == 'adapter':
+        print("Adaptor Model")
+        model = TransformerAdapterModel2(
+            model_arch=cfg["model_params"]["model_architecture"],
+            num_input_channels=rasterizer.num_channels(),
+            num_targets=3 * cfg["model_params"]["future_num_frames"],  # X, Y, Yaw * number of future states
+            weights_scaling=[1., 1., 1.],
+            criterion=nn.MSELoss(reduction="none"),
+            transform=cfg["model_params"]["transform"],
+            adapter_downsample=cfg["finetune_params"]["adapter_downsample"],)
     else:
         print("Xmer Model")
         model = TransformerModel(
@@ -276,15 +268,17 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 model_path = cfg["finetune_params"]["model_path"]
-if cfg["finetune_params"]["strategy"] == 'adapter':
-    model.model.vit = load_adaptor_model(model.model.vit, model_path)
+if cfg["finetune_params"]["strategy"] == 'memory':
+    model.model.vit = load_memory_model(model.model.vit, model_path)
+elif cfg["finetune_params"]["strategy"] == 'adapter':
+    model = load_model(model, model_path, load_strict=False)
 else:
     model = load_model(model, model_path)
 
 if cfg["finetune_params"]["strategy"] == 'head':
     print("Finetuning Head Classifier")
     freeze_all_but_head(model)
-elif cfg["finetune_params"]["strategy"] == 'norm':
+elif cfg["finetune_params"]["strategy"] in {'norm'}:
     print("Finetuning Layer Normalization and Classifier")
     freeze_all_but_LN_and_head(model)
 elif cfg["finetune_params"]["strategy"] == 'all':
@@ -292,13 +286,17 @@ elif cfg["finetune_params"]["strategy"] == 'all':
     pass
 elif cfg["finetune_params"]["strategy"] == 'adapter':
     print("Adapter Tuning")
+    print("Finetuning Layer Normalization and Classifier")
+    unfreeze_LN(model)
+elif cfg["finetune_params"]["strategy"] == 'memory':
+    print("Learnable Memory Tuning")
     pass
 else:
     raise ValueError
 
 print("Number of Params: ", count_parameters(model))
 
-# model = nn.DataParallel(model)
+model = nn.DataParallel(model)
 model = model.to(device)
 optimizer = optim.Adam(model.parameters(), lr=cfg["finetune_params"]["lr"], weight_decay=train_cfg["w_decay"])
 print("LR: ", cfg["finetune_params"]["lr"])

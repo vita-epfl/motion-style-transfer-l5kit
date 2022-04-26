@@ -49,6 +49,7 @@
 # from .visformer import *
 from .vision_transformer import *
 from .vision_transformer_adapter import *
+from .vision_transformer_adapter2 import *
 # from .vision_transformer_hybrid import *
 # from .volo import *
 # from .vovnet import *

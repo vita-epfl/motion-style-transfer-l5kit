@@ -11,8 +11,8 @@ from l5kit.environment.utils import get_scene_types
 from l5kit.simulation.dataset import SimulationConfig
 from l5kit.simulation.unroll import ClosedLoopSimulator
 from stable_baselines3.common.logger import Logger
-from joblib import Parallel, delayed
-from joblib.externals.loky import set_loky_pickler
+# from joblib import Parallel, delayed
+# from joblib.externals.loky import set_loky_pickler
 
 
 def eval_model(model: torch.nn.Module, dataset: EgoDataset, logger: Logger, d_set: str, iter_num: int,
