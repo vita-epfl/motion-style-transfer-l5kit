@@ -28,8 +28,9 @@ def eval_model(model: torch.nn.Module, eval_dataset: AgentDataset,
                eval_gt_path: str, eval_cfg: Any, logger: Logger,
                d_set: str, iter_num: int):
 
+    model = torch.nn.DataParallel(model, device_ids=[0])
     eval_dataloader = DataLoader(eval_dataset, shuffle=eval_cfg["shuffle"], batch_size=eval_cfg["batch_size"], 
-                                num_workers=eval_cfg["num_workers"])
+                                 num_workers=eval_cfg["num_workers"])
     # ==== EVAL LOOP
     model.eval()
     torch.set_grad_enabled(False)
@@ -69,8 +70,10 @@ def eval_model(model: torch.nn.Module, eval_dataset: AgentDataset,
         if metric_name == 'neg_multi_log_likelihood':
             logger.record(f'{d_set}/{metric_name}', metric_mean)
         elif metric_name == 'time_displace':
-            logger.record(f'{d_set}/{metric_name}', metric_mean[-1])
+            logger.record(f'{d_set}/fde', metric_mean[-1])
+            logger.record(f'{d_set}/ade', np.mean(metric_mean))
 
+    model = torch.nn.DataParallel(model)
     model.train()
     torch.set_grad_enabled(True)
 
