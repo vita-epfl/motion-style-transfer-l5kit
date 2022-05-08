@@ -21,6 +21,7 @@ class TransformerModel(nn.Module):
         criterion: nn.Module,
         pretrained: bool = True,
         transform: bool = False,
+        dropout: float = 0.0,
     ) -> None:
         """Initializes the planning model.
 
@@ -48,22 +49,26 @@ class TransformerModel(nn.Module):
 
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         if self.model_arch == "vit_tiny":
-            self.model = create_model('vit_tiny_patch16_224', pretrained=pretrained).to(device)
+            self.model = create_model('vit_tiny_patch16_224', pretrained=pretrained, drop_rate=dropout, drop_path_rate=dropout).to(device)
+            # self.model = create_model('vit_tiny_patch16_224', pretrained=pretrained).to(device)
             if self.num_input_channels!=3:
                 self.model.patch_embed.proj = nn.Conv2d(self.num_input_channels, 192, kernel_size=(16, 16), stride=(16, 16))
             self.model.head = nn.Linear(in_features= 192 , out_features=num_targets)
         elif self.model_arch == "vit_small_32":
-            self.model = create_model('vit_small_patch32_224', pretrained=pretrained).to(device)
+            self.model = create_model('vit_small_patch32_224', pretrained=pretrained, drop_rate=dropout, drop_path_rate=dropout).to(device)
+            # self.model = create_model('vit_small_patch32_224', pretrained=pretrained).to(device)
             if self.num_input_channels!=3:
                 self.model.patch_embed.proj = nn.Conv2d(self.num_input_channels, 384, kernel_size=(32, 32), stride=(32, 32))
             self.model.head = nn.Linear(in_features= 384 , out_features=num_targets)
         elif self.model_arch == "vit_small":
-            self.model = create_model('vit_small_patch16_224', pretrained=pretrained).to(device)
+            self.model = create_model('vit_small_patch16_224', pretrained=pretrained, drop_rate=dropout, drop_path_rate=dropout).to(device)
+            # self.model = create_model('vit_small_patch16_224', pretrained=pretrained).to(device)
             if self.num_input_channels!=3:
                 self.model.patch_embed.proj = nn.Conv2d(self.num_input_channels, 384, kernel_size=(16, 16), stride=(16, 16))
             self.model.head = nn.Linear(in_features= 384 , out_features=num_targets)
         elif self.model_arch == "vit_base":
-            self.model = create_model('vit_base_patch16_224', pretrained=pretrained).to(device)
+            self.model = create_model('vit_base_patch16_224', pretrained=pretrained, drop_rate=dropout, drop_path_rate=dropout).to(device)
+            # self.model = create_model('vit_base_patch16_224', pretrained=pretrained).to(device)
             if self.num_input_channels!=3:
                 self.model.patch_embed.proj = nn.Conv2d(self.num_input_channels, 768, kernel_size=(16, 16), stride=(16, 16))
             self.model.head = nn.Linear(in_features= 768 , out_features=num_targets)

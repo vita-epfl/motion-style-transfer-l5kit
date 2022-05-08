@@ -146,7 +146,8 @@ elif cfg["model_params"]["model_architecture"] in {"vit_tiny", "vit_small", "vit
         num_targets=3 * cfg["model_params"]["future_num_frames"],  # X, Y, Yaw * number of future states
         weights_scaling=[1., 1., 1.],
         criterion=nn.MSELoss(reduction="none"),
-        transform=cfg["model_params"]["transform"])
+        transform=cfg["model_params"]["transform"],
+        dropout=cfg["model_params"]["dropout"])
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -169,11 +170,21 @@ scheduler = torch.optim.lr_scheduler.OneCycleLR(
     max_lr=5e-4,
     pct_start=0.3)
 
+start_epoch = 0
+# Load model if necessary
+if cfg["train_params"]["model_path"] != "None":
+    print("Loading model")
+    checkpoint = torch.load(cfg["train_params"]["model_path"])
+    model.module.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+    start_epoch = checkpoint['epoch']
+
 # Train
 model.train()
 torch.set_grad_enabled(True)
-total_steps = 0
-for epoch in range(train_cfg['epochs']):
+total_steps = start_epoch * len(train_dataloader)
+for epoch in range(start_epoch, train_cfg['epochs']):
     print(epoch , "/", train_cfg['epochs'])
     for data in tqdm(train_dataloader):
     # for data in train_dataloader:
@@ -201,14 +212,20 @@ for epoch in range(train_cfg['epochs']):
     if (epoch + 1) % cfg["train_params"]["checkpoint_every_n_epochs"] == 0:
         print("Saving............................................")
         path_to_save = str(save_path / f"{output_name}_{total_steps}_steps.pth")
-        torch.save(model.state_dict(), path_to_save)
+        # torch.save(model.state_dict(), path_to_save)
         # torch.save(model.cpu(), path_to_save)
         # model = model.to(device)
+        torch.save({
+                    'epoch': epoch + 1,
+                    'model_state_dict': model.module.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict(),
+                    }, path_to_save)
 
 print("Saving model")
 # Final Checkpoint
 path_to_save = str(save_path / f"{output_name}_{total_steps}_steps.pth")
-torch.save(model.state_dict(), path_to_save)
+torch.save(model.module.state_dict(), path_to_save)
 # torch.save(model.cpu(), path_to_save)
 # model = model.to(device)
 print("Saved model")
