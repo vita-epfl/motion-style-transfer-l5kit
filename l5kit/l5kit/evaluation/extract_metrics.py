@@ -69,8 +69,8 @@ def compute_metrics_csv(ground_truth_path: str, inference_output_path: str, metr
     for el in read_pred_csv(inference_output_path):
         inference[el["track_id"] + el["timestamp"]] = el
 
-    if not validate_dicts(ground_truth, inference):
-        raise ValueError("Error validating csv, see above for details.")
+    # if not validate_dicts(ground_truth, inference):
+    #     raise ValueError("Error validating csv, see above for details.")
 
     metrics_dict = defaultdict(list)
 
@@ -78,10 +78,11 @@ def compute_metrics_csv(ground_truth_path: str, inference_output_path: str, metr
         gt_coord = ground_truth_value["coord"]
         avail = ground_truth_value["avail"]
 
-        pred_coords = inference[key]["coords"]
-        conf = inference[key]["conf"]
-        for metric in metrics:
-            metrics_dict[metric.__name__].append(metric(gt_coord, pred_coords, conf, avail))
+        if key in inference:
+            pred_coords = inference[key]["coords"]
+            conf = inference[key]["conf"]
+            for metric in metrics:
+                metrics_dict[metric.__name__].append(metric(gt_coord, pred_coords, conf, avail))
 
     # compute average of each metric
     return {metric_name: np.mean(values, axis=0) for metric_name, values in metrics_dict.items()}

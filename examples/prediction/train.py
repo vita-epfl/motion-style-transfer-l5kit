@@ -195,7 +195,19 @@ eval_zarr = ChunkedDataset(eval_zarr_path).open()
 eval_mask = np.load(eval_mask_path)["arr_0"]
 # ===== INIT DATASET AND LOAD MASK
 eval_dataset = AgentDataset(cfg, eval_zarr, rasterizer, agents_mask=eval_mask)
-print(eval_dataset)
+
+scene_id_to_type_list_val = get_scene_types(scene_id_to_type_val_path)
+# print(eval_dataset)
+print("Splitting Validation Data")
+filter_type = train_cfg["filter_type"]
+print("Filter Type: ", filter_type)
+# Split data into "upper" and "lower" for PETuning
+eval_dataset_ind = subset_and_subsample_filtered(eval_dataset, ratio=1.0, step=1,
+                                                    scene_id_to_type_list=scene_id_to_type_list_val,
+                                                    cumulative_sizes=cumulative_sizes, filter_type="upper")
+eval_dataset_ood = subset_and_subsample_filtered(eval_dataset, ratio=1.0, step=1,
+                                                    scene_id_to_type_list=scene_id_to_type_list_val,
+                                                    cumulative_sizes=cumulative_sizes, filter_type="lower")
 
 # Train
 model.train()
@@ -222,6 +234,9 @@ for epoch in range(start_epoch, train_cfg['epochs']):
     if (epoch + 1) % cfg["train_params"]["eval_every_n_iters"] == 0:
         print("Evaluating............................................")
         eval_model(model, eval_dataset, eval_gt_path, eval_cfg, logger, "eval", total_steps)
+        print("Evaluating Splits............................................")
+        eval_model(model, eval_dataset_ind, eval_gt_path, eval_cfg, logger, "eval_upper", total_steps)
+        eval_model(model, eval_dataset_ood, eval_gt_path, eval_cfg, logger, "eval_lower", total_steps)
 
     if (epoch + 1) % cfg["train_params"]["checkpoint_every_n_iters"] == 0:
         print("Saving............................................")
@@ -242,4 +257,8 @@ print("Saved model")
 
 print("Starting Final Evaluation")
 eval_model(model, eval_dataset, eval_gt_path, eval_cfg, logger, "eval", total_steps+10)
+print("Evaluating Splits............................................")
+eval_model(model, eval_dataset_ind, eval_gt_path, eval_cfg, logger, "eval_upper", total_steps+10)
+eval_model(model, eval_dataset_ood, eval_gt_path, eval_cfg, logger, "eval_lower", total_steps+10)
+
 print(" Done Done ")

@@ -179,6 +179,8 @@ if cfg["train_params"]["model_path"] != "None":
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
     start_epoch = checkpoint['epoch']
+    # model.module.load_state_dict(checkpoint)
+    # start_epoch = 15
 
 # Train
 model.train()
