@@ -18,7 +18,8 @@ from stable_baselines3.common.logger import Logger
 def eval_model(model: torch.nn.Module, dataset: EgoDataset, logger: Logger, d_set: str, iter_num: int,
                num_scenes_to_unroll: int, num_simulation_steps: int = None,
                enable_scene_type_aggregation: Optional[bool] = False,
-               scene_id_to_type_path: Optional[str] = None) -> None:
+               scene_id_to_type_path: Optional[str] = None,
+               filter_type: Optional[str] = None) -> None:
     """Evaluator function for the drivenet model. Evaluate the model using the CLEMetricSet
     of L5Kit. Logging is performed in the Tensorboard logger.
 
@@ -54,6 +55,9 @@ def eval_model(model: torch.nn.Module, dataset: EgoDataset, logger: Logger, d_se
         print("Start index", start_idx)
         end_idx = min(num_scenes_to_unroll, start_idx + batch_unroll)
         scenes_to_unroll = list(range(start_idx, end_idx))
+        if filter_type is not None:
+            scene_ids_to_scene_types = get_scene_types(scene_id_to_type_path)
+            scenes_to_unroll = [x for x in scenes_to_unroll if scene_ids_to_scene_types[x][0] == filter_type]
         sim_outs = sim_loop.unroll(scenes_to_unroll)
         metric_set.evaluator.evaluate(sim_outs)
 
