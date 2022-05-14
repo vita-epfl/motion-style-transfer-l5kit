@@ -8,11 +8,10 @@ import torchvision.transforms as T
 
 from l5kit.environment import models
 from l5kit.planning.rasterized.xmer import TransformerModel
-from l5kit.planning.rasterized.adapter import Adapter
-from l5kit.timm.models.vision_transformer_adapter2 import VisionTransformerAdapter2
+from l5kit.timm.models.lora_transformer import LoraTransformer
 
 
-class TransformerAdapterModel2(TransformerModel):
+class TransformerLora(TransformerModel):
     """Raster-based planning model with adapter."""
 
     def __init__(
@@ -24,8 +23,7 @@ class TransformerAdapterModel2(TransformerModel):
         criterion: nn.Module,
         pretrained: bool = True,
         transform: bool = False,
-        adapter_downsample: int = 8,
-        num_adapters: int = 2,
+        rank: int = 8,
     ) -> None:
         """Initializes the planning model.
 
@@ -39,10 +37,9 @@ class TransformerAdapterModel2(TransformerModel):
         super().__init__(model_arch, num_input_channels, num_targets, weights_scaling,
                          criterion, pretrained, transform)
 
-        self.adapter_downsample = adapter_downsample
+        self.rank = rank
         if self.model_arch == "vit_tiny":
-            self.model = VisionTransformerAdapter2(patch_size=16, embed_dim=192, depth=12, num_heads=3,
-                                                   in_chans=self.num_input_channels, num_classes=num_targets,
-                                                   adapter_downsample=self.adapter_downsample, num_adapters=num_adapters)
+            self.model = LoraTransformer(patch_size=16, embed_dim=192, depth=12, num_heads=3,
+                                         in_chans=self.num_input_channels, num_classes=num_targets,)
         else:
             raise NotImplementedError

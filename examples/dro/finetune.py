@@ -20,6 +20,7 @@ from l5kit.planning.rasterized.model import RasterizedPlanningModel
 from l5kit.planning.rasterized.xmer import TransformerModel
 from l5kit.planning.rasterized.xmer_adapter import TransformerAdapterModel
 from l5kit.planning.rasterized.xmer_adapter2 import TransformerAdapterModel2
+from l5kit.planning.rasterized.xmer_lora import TransformerLora
 from l5kit.random import GaussianRandomGenerator
 from l5kit.rasterization import build_rasterizer
 from stable_baselines3.common import utils
@@ -182,6 +183,12 @@ def main():
                         help='Downsampling of adapters')
     parser.add_argument('--num_memory_cell', default=20, type=int,
                         help='Number of extra memory cells')
+    parser.add_argument('--num_adapters', default=2, type=int,
+                        help='Number of adapters, choice (1, 2, 3)')
+    parser.add_argument('--perturb', default=0.5, type=float,
+                        help='Perturbation of ego (as a form of augmentation)')
+    parser.add_argument('--lr', default=5e-4, type=float,
+                        help='Learning rate')
     args = parser.parse_args()
     cfg["train_data_loader"]["ratio"] = args.ratio
     cfg["finetune_params"]["output_name"] = args.output
@@ -189,6 +196,9 @@ def main():
     cfg["finetune_params"]["layer_num"] = args.layer_num
     cfg["finetune_params"]["adapter_downsample"] = args.adapter_downsample
     cfg["finetune_params"]["num_memory_cell"] = args.num_memory_cell
+    cfg["finetune_params"]["num_adapters"] = args.num_adapters
+    cfg["train_data_loader"]["perturb_probability"] = args.perturb
+    cfg["finetune_params"]["lr"] = args.lr
 
     # Get Groups (e.g. Turns, Mission)
     if cfg["train_data_loader"]["group_type"] == 'turns':
@@ -295,7 +305,17 @@ def main():
                 weights_scaling=[1., 1., 1.],
                 criterion=nn.MSELoss(reduction="none"),
                 transform=cfg["model_params"]["transform"],
-                adapter_downsample=cfg["finetune_params"]["adapter_downsample"],)
+                adapter_downsample=cfg["finetune_params"]["adapter_downsample"],
+                num_adapters=cfg["finetune_params"]["num_adapters"],)
+        elif cfg["finetune_params"]["strategy"] == 'lora':
+            print("LoRA Model")
+            model = TransformerLora(
+                model_arch=cfg["model_params"]["model_architecture"],
+                num_input_channels=rasterizer.num_channels(),
+                num_targets=3 * cfg["model_params"]["future_num_frames"],  # X, Y, Yaw * number of future states
+                weights_scaling=[1., 1., 1.],
+                criterion=nn.MSELoss(reduction="none"),
+                transform=cfg["model_params"]["transform"],)
         else:
             print("Xmer Model")
             model = TransformerModel(
@@ -313,6 +333,8 @@ def main():
     if cfg["finetune_params"]["strategy"] == 'memory':
         model.model.vit = load_memory_model(model.model.vit, model_path)
     elif cfg["finetune_params"]["strategy"] == 'adapter':
+        model = load_model(model, model_path, load_strict=False)
+    elif cfg["finetune_params"]["strategy"] == 'lora':
         model = load_model(model, model_path, load_strict=False)
     elif cfg["finetune_params"]["strategy"] == 'scratch':
         pass
@@ -342,8 +364,16 @@ def main():
     elif cfg["finetune_params"]["strategy"] == 'scratch':
         print("Training whole model from scratch")
         pass
+    elif cfg["finetune_params"]["strategy"] == 'lora':
+        print("Training LoRA")
+        import loralib as lora
+        lora.mark_only_lora_as_trainable(model)
+        unfreeze_LN_and_head(model.model)
     else:
         raise ValueError
+
+    # for name, param in model.named_parameters():
+    #     print(name, param.requires_grad)
 
     print("Number of Params: ", count_parameters(model))
 

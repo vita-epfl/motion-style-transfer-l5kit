@@ -202,10 +202,25 @@ class Block(nn.Module):
         
         self.num_adapters = num_adapters
         if self.num_adapters == 2:
+            print("Adapter Config 2")
             self.adapter1 = Adapter(dim,
                                 down_sample=adapter_downsample, 
                                 non_linearity=adapter_non_linearity, 
                                 init_bert_weights=adapter_init_bert_weights)
+            self.adapter2 = Adapter(dim,
+                                down_sample=adapter_downsample, 
+                                non_linearity=adapter_non_linearity, 
+                                init_bert_weights=adapter_init_bert_weights)
+        elif self.num_adapters == 1:
+            print("Adapter Config 1")
+            self.adapter1 = Adapter(dim,
+                                down_sample=adapter_downsample, 
+                                non_linearity=adapter_non_linearity, 
+                                init_bert_weights=adapter_init_bert_weights)
+            self.adapter2 = nn.Identity()
+        elif self.num_adapters == 3:
+            print("Adapter Config 3")
+            self.adapter1 = nn.Identity()
             self.adapter2 = Adapter(dim,
                                 down_sample=adapter_downsample, 
                                 non_linearity=adapter_non_linearity, 
@@ -215,13 +230,16 @@ class Block(nn.Module):
 
 
     def forward(self, x):
-        if self.num_adapters==2:
-            # x = x + self.drop_path1(self.adapter1( self.ls1(self.attn(self.norm1(x))), self.ls1(self.attn(self.norm1(x))) ))
-            # x = x + self.drop_path2(self.adapter2( self.ls2(self.mlp(self.norm2(x))), self.ls2(self.mlp(self.norm2(x))) ))
-            x = x + self.drop_path1(self.adapter1( self.ls1(self.attn(self.norm1(x))) ))
-            x = x + self.drop_path2(self.adapter2( self.ls2(self.mlp(self.norm2(x))) ))
-        else:
-            raise NotImplementedError
+        # if self.num_adapters==2:
+        #     # x = x + self.drop_path1(self.adapter1( self.ls1(self.attn(self.norm1(x))), self.ls1(self.attn(self.norm1(x))) ))
+        #     # x = x + self.drop_path2(self.adapter2( self.ls2(self.mlp(self.norm2(x))), self.ls2(self.mlp(self.norm2(x))) ))
+        #     x = x + self.drop_path1(self.adapter1( self.ls1(self.attn(self.norm1(x))) ))
+        #     x = x + self.drop_path2(self.adapter2( self.ls2(self.mlp(self.norm2(x))) ))
+        # else:
+        #     raise NotImplementedError
+        # return x
+        x = x + self.drop_path1(self.adapter1( self.ls1(self.attn(self.norm1(x))) ))
+        x = x + self.drop_path2(self.adapter2( self.ls2(self.mlp(self.norm2(x))) ))
         return x
 
 class VisionTransformerAdapter2(nn.Module):
