@@ -33,3 +33,32 @@ def subset_and_subsample_filtered(dataset: AgentDataset, ratio: float, step: int
 
     scene_samples = np.array(list(filter_ids))
     return Subset(dataset, scene_samples)
+
+
+def subset_and_subsample_agents(dataset: AgentDataset, ratio: float, step: int,
+                                filter_type: str) -> Subset:
+    
+    filter_type_to_agent_type_id = {"cars": 3, "cycs": 12, "peds": 14}
+    filter_agent_id = filter_type_to_agent_type_id[filter_type]
+    print("Agents: ", filter_type, " ID: ", filter_agent_id)
+
+    import time
+    start = time.time()
+    # Sub-sample
+    indices_to_use = range(0, int(ratio * len(dataset.agents_indices)), step)
+    agents = dataset.dataset.agents
+
+    print("Iterating over: ", len(indices_to_use))
+    # Loop over scenes
+    filter_ids = set()
+    for curr_index in indices_to_use:
+        index = dataset.agents_indices[curr_index]
+        # class_id = np.argmax(agents[index]['label_probabilities'])
+        # if class_id == filter_agent_id:
+        if agents[index]['label_probabilities'][filter_agent_id] >= 0.5:
+            filter_ids.add(curr_index)
+
+    scene_samples = np.array(list(filter_ids))
+    print("Time: ", time.time() - start)
+    print("total agents: ", len(scene_samples))
+    return Subset(dataset, scene_samples)
