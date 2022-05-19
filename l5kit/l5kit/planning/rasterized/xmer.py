@@ -121,3 +121,13 @@ class TransformerModel(nn.Module):
             pred_yaws = predicted[:, :, 2:3]
             eval_dict = {"positions": pred_positions, "yaws": pred_yaws}
             return eval_dict
+
+    def get_last_selfattention(self, data_batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+            # [batch_size, channels, height, width]
+            image_batch = data_batch["image"]
+            if self.transform:
+                image_batch = self.transforms(image_batch)
+            # import pdb; pdb.set_trace()
+            # [batch_size, num_steps * 2]
+            self_attns = self.model.get_last_selfattention(image_batch)
+            return self_attns

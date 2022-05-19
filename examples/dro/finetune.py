@@ -173,6 +173,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--ratio', default=0.025, type=float,
                         help='ratio')
+    parser.add_argument('--step', default=5, type=int,
+                        help='step')
     parser.add_argument('--output', default="ft_batches", type=str,
                         help='output')
     parser.add_argument('--strategy', default="all", type=str,
@@ -189,8 +191,17 @@ def main():
                         help='Perturbation of ego (as a form of augmentation)')
     parser.add_argument('--lr', default=5e-4, type=float,
                         help='Learning rate')
+    parser.add_argument('-e', '--epochs', default=250, type=int,
+                        help='Number of epochs')
+    parser.add_argument('-ev', '--eval_every_n_epochs', default=25, type=int,
+                        help='Eval every ev epochs')
+    parser.add_argument('-s', '--seed', default=42, type=int,
+                        help='Seed')
+    parser.add_argument('--rank', default=8, type=int,
+                        help='Rank of LoRA matrix')
     args = parser.parse_args()
     cfg["train_data_loader"]["ratio"] = args.ratio
+    cfg["train_data_loader"]["step"] = args.step
     cfg["finetune_params"]["output_name"] = args.output
     cfg["finetune_params"]["strategy"] = args.strategy
     cfg["finetune_params"]["layer_num"] = args.layer_num
@@ -199,6 +210,10 @@ def main():
     cfg["finetune_params"]["num_adapters"] = args.num_adapters
     cfg["train_data_loader"]["perturb_probability"] = args.perturb
     cfg["finetune_params"]["lr"] = args.lr
+    cfg["train_data_loader"]["epochs"] = args.epochs
+    cfg["train_params"]["eval_every_n_epochs"] = args.eval_every_n_epochs
+    cfg["train_params"]["seed"] = args.seed
+    cfg["finetune_params"]["rank"] = args.rank
 
     # Get Groups (e.g. Turns, Mission)
     if cfg["train_data_loader"]["group_type"] == 'turns':
@@ -315,7 +330,8 @@ def main():
                 num_targets=3 * cfg["model_params"]["future_num_frames"],  # X, Y, Yaw * number of future states
                 weights_scaling=[1., 1., 1.],
                 criterion=nn.MSELoss(reduction="none"),
-                transform=cfg["model_params"]["transform"],)
+                transform=cfg["model_params"]["transform"],
+                rank=cfg["finetune_params"]["rank"])
         else:
             print("Xmer Model")
             model = TransformerModel(
@@ -367,8 +383,10 @@ def main():
     elif cfg["finetune_params"]["strategy"] == 'lora':
         print("Training LoRA")
         import loralib as lora
-        lora.mark_only_lora_as_trainable(model)
-        unfreeze_LN_and_head(model.model)
+        lora.mark_only_lora_as_trainable(model, bias='all')
+        # for _, param in model.model.head.named_parameters():
+            # param.requires_grad = True
+        # unfreeze_LN_and_head(model.model)
     else:
         raise ValueError
 
@@ -419,6 +437,13 @@ def main():
     #     print(name, param.requires_grad)
     # exit()
     total_steps = 0
+    # print("Saving model")
+    # # Final Checkpoint
+    # path_to_save = str(save_path / f"{output_name}_{total_steps}_steps.pth")
+    # torch.save(model.module.state_dict(), path_to_save)
+    # # torch.save(model.cpu(), path_to_save)
+    # # model = model.to(device)
+    print("Saved model")
     for epoch in range(train_cfg['epochs']):
         print(epoch , "/", train_cfg['epochs'])
         for data in tqdm(train_dataloader):
@@ -455,7 +480,7 @@ def main():
     # print("Saving model")
     # # Final Checkpoint
     # path_to_save = str(save_path / f"{output_name}_{total_steps}_steps.pth")
-    # torch.save(model.state_dict(), path_to_save)
+    # torch.save(model.module.state_dict(), path_to_save)
     # # torch.save(model.cpu(), path_to_save)
     # # model = model.to(device)
     # print("Saved model")

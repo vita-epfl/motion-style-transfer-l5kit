@@ -40,6 +40,6 @@ class TransformerLora(TransformerModel):
         self.rank = rank
         if self.model_arch == "vit_tiny":
             self.model = LoraTransformer(patch_size=16, embed_dim=192, depth=12, num_heads=3,
-                                         in_chans=self.num_input_channels, num_classes=num_targets,)
+                                         in_chans=self.num_input_channels, num_classes=num_targets, rank=rank)
         else:
             raise NotImplementedError
