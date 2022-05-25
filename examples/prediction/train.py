@@ -30,7 +30,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from tqdm import tqdm
 
 from drivenet_eval import eval_model
-from utils import (subset_and_subsample, subset_and_subsample_filtered)
+from utils import (subset_and_subsample, subset_and_subsample_filtered, subset_and_subsample_agents)
 
 
 # Dataset is assumed to be on the folder specified
@@ -202,12 +202,15 @@ print("Splitting Validation Data")
 filter_type = train_cfg["filter_type"]
 print("Filter Type: ", filter_type)
 # Split data into "upper" and "lower" for PETuning
-eval_dataset_ind = subset_and_subsample_filtered(eval_dataset, ratio=1.0, step=1,
-                                                    scene_id_to_type_list=scene_id_to_type_list_val,
-                                                    cumulative_sizes=cumulative_sizes, filter_type="upper")
-eval_dataset_ood = subset_and_subsample_filtered(eval_dataset, ratio=1.0, step=1,
-                                                    scene_id_to_type_list=scene_id_to_type_list_val,
-                                                    cumulative_sizes=cumulative_sizes, filter_type="lower")
+# eval_dataset_ind = subset_and_subsample_filtered(eval_dataset, ratio=1.0, step=1,
+#                                                     scene_id_to_type_list=scene_id_to_type_list_val,
+#                                                     cumulative_sizes=cumulative_sizes, filter_type="upper")
+# eval_dataset_ood = subset_and_subsample_filtered(eval_dataset, ratio=1.0, step=1,
+#                                                     scene_id_to_type_list=scene_id_to_type_list_val,
+#                                                     cumulative_sizes=cumulative_sizes, filter_type="lower")
+eval_dataset_car = subset_and_subsample_agents(eval_dataset, ratio=1.0, step=1, filter_type="cars")
+eval_dataset_cyc = subset_and_subsample_agents(eval_dataset, ratio=1.0, step=1, filter_type="cycs")
+eval_dataset_ped = subset_and_subsample_agents(eval_dataset, ratio=1.0, step=1, filter_type="peds")
 
 # Train
 model.train()
@@ -235,8 +238,11 @@ for epoch in range(start_epoch, train_cfg['epochs']):
         print("Evaluating............................................")
         eval_model(model, eval_dataset, eval_gt_path, eval_cfg, logger, "eval", total_steps)
         print("Evaluating Splits............................................")
-        eval_model(model, eval_dataset_ind, eval_gt_path, eval_cfg, logger, "eval_upper", total_steps)
-        eval_model(model, eval_dataset_ood, eval_gt_path, eval_cfg, logger, "eval_lower", total_steps)
+        # eval_model(model, eval_dataset_ind, eval_gt_path, eval_cfg, logger, "eval_upper", total_steps)
+        # eval_model(model, eval_dataset_ood, eval_gt_path, eval_cfg, logger, "eval_lower", total_steps)
+        eval_model(model, eval_dataset_car, eval_gt_path, eval_cfg, logger, "eval_car", total_steps)
+        eval_model(model, eval_dataset_cyc, eval_gt_path, eval_cfg, logger, "eval_cyc", total_steps)
+        eval_model(model, eval_dataset_ped, eval_gt_path, eval_cfg, logger, "eval_ped", total_steps)
 
     if (epoch + 1) % cfg["train_params"]["checkpoint_every_n_iters"] == 0:
         print("Saving............................................")
@@ -258,7 +264,10 @@ print("Saved model")
 print("Starting Final Evaluation")
 eval_model(model, eval_dataset, eval_gt_path, eval_cfg, logger, "eval", total_steps+10)
 print("Evaluating Splits............................................")
-eval_model(model, eval_dataset_ind, eval_gt_path, eval_cfg, logger, "eval_upper", total_steps+10)
-eval_model(model, eval_dataset_ood, eval_gt_path, eval_cfg, logger, "eval_lower", total_steps+10)
+# eval_model(model, eval_dataset_ind, eval_gt_path, eval_cfg, logger, "eval_upper", total_steps+10)
+# eval_model(model, eval_dataset_ood, eval_gt_path, eval_cfg, logger, "eval_lower", total_steps+10)
+eval_model(model, eval_dataset_car, eval_gt_path, eval_cfg, logger, "eval_car", total_steps+10)
+eval_model(model, eval_dataset_cyc, eval_gt_path, eval_cfg, logger, "eval_cyc", total_steps+10)
+eval_model(model, eval_dataset_ped, eval_gt_path, eval_cfg, logger, "eval_ped", total_steps+10)
 
 print(" Done Done ")
