@@ -72,7 +72,7 @@ train_data_loader:
   dro_step_size: 0.01
   dro_normalize: False
   split: True
-  filter_type: "cycs"
+  filter_type: "lower"
 
 val_data_loader:
   key: "scenes/validate.zarr"
@@ -94,7 +94,7 @@ train_params:
 ## Finetune params
 finetune_params:
   lr: 5.0E-4
-  model_path: "examples/prediction/checkpoints/vit_tiny_sample10_hist5_rerun_15_epochs.pth"
+  model_path: "examples/prediction/checkpoints/vit_tiny_sample10_hist5_split_rerun_15_epochs.pth"
   strategy: "all"
   output_name: "ft_batches"
   num_memory_cell: 20
