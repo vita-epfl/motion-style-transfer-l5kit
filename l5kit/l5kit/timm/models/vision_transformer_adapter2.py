@@ -156,7 +156,7 @@ class Attention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, x):
+    def forward(self, x, return_attention=False):
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)   # make torchscript happy (cannot use tensor as tuple)
@@ -168,6 +168,11 @@ class Attention(nn.Module):
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
+
+        if return_attention:
+            print("Returning attention")
+            return x, attn
+
         return x
 
 
@@ -229,7 +234,11 @@ class Block(nn.Module):
             raise NotImplementedError
 
 
-    def forward(self, x):
+    def forward(self, x, return_attention=False):
+        if return_attention:
+            x, attn = self.attn(self.norm1(x), return_attention=True)
+            print("Returning attention")
+            return attn
         # if self.num_adapters==2:
         #     # x = x + self.drop_path1(self.adapter1( self.ls1(self.attn(self.norm1(x))), self.ls1(self.attn(self.norm1(x))) ))
         #     # x = x + self.drop_path2(self.adapter2( self.ls2(self.mlp(self.norm2(x))), self.ls2(self.mlp(self.norm2(x))) ))
@@ -398,6 +407,19 @@ class VisionTransformerAdapter2(nn.Module):
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
+
+
+    def get_last_selfattention(self, x):
+        x = self.patch_embed(x)
+        x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
+        x = self.pos_drop(x + self.pos_embed)
+
+        for i, blk in enumerate(self.blocks):
+            if i < len(self.blocks) - 1:
+                x = blk(x)
+            else:
+                # return attention of the last block
+                return blk(x, return_attention=True)
 
 
 def init_weights_vit_timm(module: nn.Module, name: str = ''):

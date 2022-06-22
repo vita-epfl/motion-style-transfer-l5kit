@@ -14,13 +14,11 @@ import torch
 from l5kit.configs import load_config_data
 from l5kit.data import ChunkedDataset, LocalDataManager
 from l5kit.dataset import EgoDataset
-from l5kit.environment.utils import get_scene_types, get_scene_types_as_dict
+from l5kit.environment.utils import get_scene_types
 from l5kit.kinematic import AckermanPerturbation
 from l5kit.planning.rasterized.model import RasterizedPlanningModel
 from l5kit.planning.rasterized.xmer import TransformerModel
-from l5kit.planning.rasterized.xmer_adapter import TransformerAdapterModel
-from l5kit.planning.rasterized.xmer_adapter2 import TransformerAdapterModel2
-from l5kit.planning.rasterized.xmer_lora import TransformerLora
+from l5kit.planning.rasterized.xmer_mosa import TransformerMoSA
 from l5kit.random import GaussianRandomGenerator
 from l5kit.rasterization import build_rasterizer
 from stable_baselines3.common import utils
@@ -30,11 +28,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from tqdm import tqdm
 
 from drivenet_eval import eval_model
-from dro_utils import (append_group_index, append_group_index_cluster, append_reward_scaling,
-                       get_sample_weights, get_sample_weights_clusters, GroupBatchSampler, subset_and_subsample,
-                       subset_and_subsample_filtered)
-from group_dro_loss import LossComputer
-from vrex_loss import VRexLossComputer
+from utils import subset_and_subsample, subset_and_subsample_filtered
 
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning) 
@@ -181,13 +175,7 @@ def main():
                         help='strategy')
     parser.add_argument('--layer_num', default=11, type=int,
                         help='Layer to finetune')
-    parser.add_argument('--adapter_downsample', default=24, type=int,
-                        help='Downsampling of adapters')
-    parser.add_argument('--num_memory_cell', default=20, type=int,
-                        help='Number of extra memory cells')
-    parser.add_argument('--num_adapters', default=2, type=int,
-                        help='Number of adapters, choice (1, 2, 3)')
-    parser.add_argument('--perturb', default=0.5, type=float,
+    parser.add_argument('--perturb', default=0.0, type=float,
                         help='Perturbation of ego (as a form of augmentation)')
     parser.add_argument('--lr', default=5e-4, type=float,
                         help='Learning rate')
@@ -198,16 +186,13 @@ def main():
     parser.add_argument('-s', '--seed', default=42, type=int,
                         help='Seed')
     parser.add_argument('--rank', default=8, type=int,
-                        help='Rank of LoRA matrix')
+                        help='Rank of MoSA matrix')
     args = parser.parse_args()
     cfg["train_data_loader"]["ratio"] = args.ratio
     cfg["train_data_loader"]["step"] = args.step
     cfg["finetune_params"]["output_name"] = args.output
     cfg["finetune_params"]["strategy"] = args.strategy
     cfg["finetune_params"]["layer_num"] = args.layer_num
-    cfg["finetune_params"]["adapter_downsample"] = args.adapter_downsample
-    cfg["finetune_params"]["num_memory_cell"] = args.num_memory_cell
-    cfg["finetune_params"]["num_adapters"] = args.num_adapters
     cfg["train_data_loader"]["perturb_probability"] = args.perturb
     cfg["finetune_params"]["lr"] = args.lr
     cfg["train_data_loader"]["epochs"] = args.epochs
@@ -216,23 +201,11 @@ def main():
     cfg["finetune_params"]["rank"] = args.rank
 
     # Get Groups (e.g. Turns, Mission)
-    if cfg["train_data_loader"]["group_type"] == 'turns':
-        scene_id_to_type_mapping_file = str(path_l5kit / "dataset_metadata/train_turns_metadata.csv")
-        scene_id_to_type_val_path = str(path_l5kit / "dataset_metadata/validate_turns_metadata.csv")
-    elif cfg["train_data_loader"]["group_type"] == 'missions':
-        scene_id_to_type_mapping_file = str(path_l5kit / "dataset_metadata/train_missions.csv")
-        scene_id_to_type_val_path = str(path_l5kit / "dataset_metadata/val_missions.csv")
-    elif cfg["train_data_loader"]["group_type"] == 'split':
+    if cfg["train_data_loader"]["group_type"] == 'split':
         scene_id_to_type_mapping_file = str(path_l5kit / "dataset_metadata/train_split_1350.csv")
         scene_id_to_type_val_path = str(path_l5kit / "dataset_metadata/val_split_1350.csv")
-
     # Group Structures
-    scene_type_to_id_dict = get_scene_types_as_dict(scene_id_to_type_mapping_file)
     scene_id_to_type_list = get_scene_types(scene_id_to_type_mapping_file)
-    num_groups = len(scene_type_to_id_dict)
-    group_counts = torch.IntTensor([len(v) for k, v in scene_type_to_id_dict.items()])
-    group_str = [k for k in scene_type_to_id_dict.keys()]
-    reward_scale = {"straight": 1.0, "left": 19.5, "right": 16.6}
 
     # Logging and Saving
     output_name = cfg["finetune_params"]["output_name"]
@@ -267,8 +240,6 @@ def main():
     cumulative_sizes = train_dataset_original.cumulative_sizes
     # Load train attributes
     train_cfg = cfg["train_data_loader"]
-    train_scheme = train_cfg["scheme"]
-    group_type = train_cfg["group_type"]
     num_epochs = train_cfg["epochs"]
     split_train = train_cfg["split"]
     # Sub-sample (for faster training)
@@ -279,7 +250,7 @@ def main():
         # Switch filter type when finetuning
         filter_type = "lower" if train_cfg["filter_type"] == "upper" else "upper"
         print("Filter Type: ", filter_type)
-        # Split data into "upper" and "lower" for PETuning
+        # Split data into "upper" and "lower" for Adaptation
         train_dataset = subset_and_subsample_filtered(train_dataset_original, ratio=train_cfg['ratio'], step=train_cfg['step'],
                                                     scene_id_to_type_list=scene_id_to_type_list,
                                                     cumulative_sizes=cumulative_sizes, filter_type=filter_type)
@@ -301,30 +272,9 @@ def main():
             weights_scaling=[1., 1., 1.],
             criterion=nn.MSELoss(reduction="none"),)
     elif cfg["model_params"]["model_architecture"] in {"vit_tiny", "vit_small", "vit_base"}:
-        if cfg["finetune_params"]["strategy"] == 'memory':
-            print("Learnable Memory Model")
-            model = TransformerAdapterModel(
-                model_arch=cfg["model_params"]["model_architecture"],
-                num_input_channels=rasterizer.num_channels(),
-                num_targets=3 * cfg["model_params"]["future_num_frames"],  # X, Y, Yaw * number of future states
-                weights_scaling=[1., 1., 1.],
-                criterion=nn.MSELoss(reduction="none"),
-                transform=cfg["model_params"]["transform"],
-                num_memories_per_layer=cfg["finetune_params"]["num_memory_cell"])
-        elif cfg["finetune_params"]["strategy"] == 'adapter':
-            print("Adaptor Model")
-            model = TransformerAdapterModel2(
-                model_arch=cfg["model_params"]["model_architecture"],
-                num_input_channels=rasterizer.num_channels(),
-                num_targets=3 * cfg["model_params"]["future_num_frames"],  # X, Y, Yaw * number of future states
-                weights_scaling=[1., 1., 1.],
-                criterion=nn.MSELoss(reduction="none"),
-                transform=cfg["model_params"]["transform"],
-                adapter_downsample=cfg["finetune_params"]["adapter_downsample"],
-                num_adapters=cfg["finetune_params"]["num_adapters"],)
-        elif cfg["finetune_params"]["strategy"] == 'lora':
-            print("LoRA Model")
-            model = TransformerLora(
+        if cfg["finetune_params"]["strategy"] == 'mosa':
+            print("MoSA Adapter")
+            model = TransformerMoSA(
                 model_arch=cfg["model_params"]["model_architecture"],
                 num_input_channels=rasterizer.num_channels(),
                 num_targets=3 * cfg["model_params"]["future_num_frames"],  # X, Y, Yaw * number of future states
@@ -346,11 +296,7 @@ def main():
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
     model_path = cfg["finetune_params"]["model_path"]
-    if cfg["finetune_params"]["strategy"] == 'memory':
-        model.model.vit = load_memory_model(model.model.vit, model_path)
-    elif cfg["finetune_params"]["strategy"] == 'adapter':
-        model = load_model(model, model_path, load_strict=False)
-    elif cfg["finetune_params"]["strategy"] == 'lora':
+    if cfg["finetune_params"]["strategy"] == 'mosa':
         model = load_model(model, model_path, load_strict=False)
     elif cfg["finetune_params"]["strategy"] == 'scratch':
         pass
@@ -366,13 +312,6 @@ def main():
     elif cfg["finetune_params"]["strategy"] == 'all':
         print("Finetuning whole model")
         pass
-    elif cfg["finetune_params"]["strategy"] == 'adapter':
-        print("Adapter Tuning")
-        print("Finetuning Layer Normalization and Classifier")
-        unfreeze_LN(model)
-    elif cfg["finetune_params"]["strategy"] == 'memory':
-        print("Learnable Memory Tuning")
-        unfreeze_LN_and_head(model.model.vit)
     elif cfg["finetune_params"]["strategy"] == 'layer':
         layer_num = cfg["finetune_params"]["layer_num"]
         print(f"Finetuning Layer {layer_num}")
@@ -380,8 +319,8 @@ def main():
     elif cfg["finetune_params"]["strategy"] == 'scratch':
         print("Training whole model from scratch")
         pass
-    elif cfg["finetune_params"]["strategy"] == 'lora':
-        print("Training LoRA")
+    elif cfg["finetune_params"]["strategy"] == 'mosa':
+        print("Training MoSA Adapter")
         import loralib as lora
         lora.mark_only_lora_as_trainable(model, bias='all')
         # for _, param in model.model.head.named_parameters():
@@ -395,7 +334,6 @@ def main():
 
     print("Number of Params: ", count_parameters(model))
 
-    # model = nn.DataParallel(model)
     model = torch.nn.DataParallel(model, device_ids=[0])
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=cfg["finetune_params"]["lr"], weight_decay=train_cfg["w_decay"])
@@ -437,13 +375,6 @@ def main():
     #     print(name, param.requires_grad)
     # exit()
     total_steps = 0
-    # print("Saving model")
-    # # Final Checkpoint
-    # path_to_save = str(save_path / f"{output_name}_{total_steps}_steps.pth")
-    # torch.save(model.module.state_dict(), path_to_save)
-    # # torch.save(model.cpu(), path_to_save)
-    # # model = model.to(device)
-    print("Saved model")
     for epoch in range(train_cfg['epochs']):
         print(epoch , "/", train_cfg['epochs'])
         for data in tqdm(train_dataloader):
@@ -464,26 +395,21 @@ def main():
         # Eval
         if (epoch + 1) % cfg["train_params"]["eval_every_n_epochs"] == 0:
             print("Evaluating............................................")
-            eval_model(model, eval_dataset, logger, "eval", total_steps, num_scenes_to_unroll,
+            eval_model(model, eval_dataset, logger, "val", total_steps, num_scenes_to_unroll,
                     enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path,
-                    filter_type=filter_type)
+                    filter_type=filter_type, start_scene_id=0)
+            eval_model(model, eval_dataset, logger, "test", total_steps, num_scenes_to_unroll,
+                    enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path,
+                    filter_type=filter_type, start_scene_id=num_scenes_to_unroll)
             model.train()
 
-        # # Checkpoint
-        # if (epoch + 1) % cfg["train_params"]["checkpoint_every_n_epochs"] == 0:
-        #     print("Saving............................................")
-        #     path_to_save = str(save_path / f"{output_name}_{total_steps}_steps.pth")
-        #     torch.save(model.state_dict(), path_to_save)
-        #     # torch.save(model.cpu(), path_to_save)
-        #     # model = model.to(device)
-
-    # print("Saving model")
-    # # Final Checkpoint
-    # path_to_save = str(save_path / f"{output_name}_{total_steps}_steps.pth")
-    # torch.save(model.module.state_dict(), path_to_save)
-    # # torch.save(model.cpu(), path_to_save)
-    # # model = model.to(device)
-    # print("Saved model")
+    print("Saving model")
+    # Final Checkpoint
+    path_to_save = str(save_path / f"{output_name}_{total_steps}_steps.pth")
+    torch.save(model.module.state_dict(), path_to_save)
+    # torch.save(model.cpu(), path_to_save)
+    # model = model.to(device)
+    print("Saved model")
 
     # Eval (training format)
     # print("Train waala Eval")

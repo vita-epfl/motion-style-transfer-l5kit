@@ -149,7 +149,7 @@ class ParallelBlock(nn.Module):
             return self._forward(x)
 
 
-class LoraTransformer(nn.Module):
+class MoSATransformer(nn.Module):
     """ Vision Transformer
 
     A PyTorch impl of : `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale`

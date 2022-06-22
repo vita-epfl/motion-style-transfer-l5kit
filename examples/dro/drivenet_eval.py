@@ -11,15 +11,14 @@ from l5kit.environment.utils import get_scene_types
 from l5kit.simulation.dataset import SimulationConfig
 from l5kit.simulation.unroll import ClosedLoopSimulator
 from stable_baselines3.common.logger import Logger
-# from joblib import Parallel, delayed
-# from joblib.externals.loky import set_loky_pickler
 
 
 def eval_model(model: torch.nn.Module, dataset: EgoDataset, logger: Logger, d_set: str, iter_num: int,
                num_scenes_to_unroll: int, num_simulation_steps: int = None,
                enable_scene_type_aggregation: Optional[bool] = False,
                scene_id_to_type_path: Optional[str] = None,
-               filter_type: Optional[str] = None) -> None:
+               filter_type: Optional[str] = None,
+               start_scene_id: int = 0) -> None:
     """Evaluator function for the drivenet model. Evaluate the model using the CLEMetricSet
     of L5Kit. Logging is performed in the Tensorboard logger.
 
@@ -51,34 +50,15 @@ def eval_model(model: torch.nn.Module, dataset: EgoDataset, logger: Logger, d_se
 
     # unroll
     batch_unroll = 100
-    for start_idx in range(0, num_scenes_to_unroll, batch_unroll):
+    for start_idx in range(start_scene_id, start_scene_id + num_scenes_to_unroll, batch_unroll):
         print("Start index", start_idx)
-        end_idx = min(num_scenes_to_unroll, start_idx + batch_unroll)
+        end_idx = min(start_scene_id + num_scenes_to_unroll, start_idx + batch_unroll)
         scenes_to_unroll = list(range(start_idx, end_idx))
         if filter_type is not None:
             scene_ids_to_scene_types = get_scene_types(scene_id_to_type_path)
             scenes_to_unroll = [x for x in scenes_to_unroll if scene_ids_to_scene_types[x][0] == filter_type]
         sim_outs = sim_loop.unroll(scenes_to_unroll)
         metric_set.evaluator.evaluate(sim_outs)
-
-    ## Job Lib ################################################################
-    # set_loky_pickler("dill")
-    # batch_unroll = 100
-    # def predict_scene(start_idx):
-    #     with torch.no_grad():
-    #         print(start_idx)
-    #         end_idx = min(num_scenes_to_unroll, start_idx + batch_unroll)
-    #         scenes_to_unroll = list(range(start_idx, end_idx))
-    #         sim_outs = sim_loop.unroll(scenes_to_unroll)
-    #         return sim_outs
-
-    # sim_outs_list = Parallel(n_jobs=20, backend="threading")(delayed(predict_scene)(start_idx)
-    #                     for start_idx in range(0, num_scenes_to_unroll, batch_unroll))
-    # # sim_outs_list = Parallel(n_jobs=12)(delayed(predict_scene)(start_idx)
-    # #                     for start_idx in range(0, num_scenes_to_unroll, batch_unroll))
-    # for sim_outs in sim_outs_list:
-    #     metric_set.evaluator.evaluate(sim_outs)
-    ###############################################################################################
 
     # Aggregate metrics (ADE, FDE)
     ade, fde = L5KitEvalCallback.compute_ade_fde(metric_set)

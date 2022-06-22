@@ -26,11 +26,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from tqdm import tqdm
 
 from drivenet_eval import eval_model
-from dro_utils import (append_group_index, append_group_index_cluster, append_reward_scaling,
-                       get_sample_weights, get_sample_weights_clusters, GroupBatchSampler, subset_and_subsample,
-                       subset_and_subsample_filtered)
-from group_dro_loss import LossComputer
-from vrex_loss import VRexLossComputer
+from utils import subset_and_subsample, subset_and_subsample_filtered
 
 # Dataset is assumed to be on the folder specified
 # in the L5KIT_DATA_FOLDER environment variable
@@ -189,7 +185,6 @@ total_steps = start_epoch * len(train_dataloader)
 for epoch in range(start_epoch, train_cfg['epochs']):
     print(epoch , "/", train_cfg['epochs'])
     for data in tqdm(train_dataloader):
-    # for data in train_dataloader:
         total_steps += 1
 
         # Forward pass
@@ -214,9 +209,6 @@ for epoch in range(start_epoch, train_cfg['epochs']):
     if (epoch + 1) % cfg["train_params"]["checkpoint_every_n_epochs"] == 0:
         print("Saving............................................")
         path_to_save = str(save_path / f"{output_name}_{total_steps}_steps.pth")
-        # torch.save(model.state_dict(), path_to_save)
-        # torch.save(model.cpu(), path_to_save)
-        # model = model.to(device)
         torch.save({
                     'epoch': epoch + 1,
                     'model_state_dict': model.module.state_dict(),
@@ -224,12 +216,11 @@ for epoch in range(start_epoch, train_cfg['epochs']):
                     'scheduler_state_dict': scheduler.state_dict(),
                     }, path_to_save)
 
+
 print("Saving model")
 # Final Checkpoint
 path_to_save = str(save_path / f"{output_name}_{total_steps}_steps.pth")
 torch.save(model.module.state_dict(), path_to_save)
-# torch.save(model.cpu(), path_to_save)
-# model = model.to(device)
 print("Saved model")
 
 # Eval (training format)

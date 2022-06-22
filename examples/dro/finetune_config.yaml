@@ -55,21 +55,17 @@ raster_params:
 ## Data loader options
 train_data_loader:
   key: "scenes/train.zarr"
-  # ratio: 0.000700
-  ratio: 1.0
+  ratio: 0.005
   step: 5 # 5
-  epochs: 15 # 15
-  batch_size: 16
+  epochs: 250 # 15
+  batch_size: 64
   shuffle: True
-  num_workers: 8
-  perturb_probability: 0.5
+  num_workers: 4
+  perturb_probability: 0.0
   w_decay: 0.0
-  scheme: "default" # "weighted_reward", "weighted_sampling", "group_dro", "vrex_batch", "vrex"
+  scheme: "default"
   scheduler: "one_cycle" #  "default"
-  group_type: "split" # "missions", "turns"
-  vrex_penalty: 1.0
-  dro_step_size: 0.01
-  dro_normalize: False
+  group_type: "split"
   split: True
   filter_type: "upper"
 
@@ -78,13 +74,13 @@ val_data_loader:
   batch_size: 16
   shuffle: False
   num_workers: 8
-  max_scene_id: 100
+  max_scene_id: 1000
 
 ###################
 ## Train params
 train_params:
   seed: 42
-  checkpoint_every_n_epochs: 10
+  checkpoint_every_n_epochs: 1000
   eval_every_n_epochs: 1
   log_relative: True
   save_relative: True
@@ -95,4 +91,6 @@ finetune_params:
   lr: 5.0E-4
   model_path: "examples/dro/checkpoints/vit_tiny_split_73140_steps.pth"
   strategy: "all"
-  output_name: "vit_tiny_split_ft_lr5e4_all"
+  output_name: "ft_batches"
+  layer_num: 11
+  rank: 8

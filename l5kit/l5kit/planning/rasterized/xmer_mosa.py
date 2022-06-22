@@ -8,10 +8,10 @@ import torchvision.transforms as T
 
 from l5kit.environment import models
 from l5kit.planning.rasterized.xmer import TransformerModel
-from l5kit.timm.models.lora_transformer import LoraTransformer
+from l5kit.timm.models.mosa_transformer import MoSATransformer
 
 
-class TransformerLora(TransformerModel):
+class TransformerMoSA(TransformerModel):
     """Raster-based planning model with adapter."""
 
     def __init__(
@@ -39,7 +39,7 @@ class TransformerLora(TransformerModel):
 
         self.rank = rank
         if self.model_arch == "vit_tiny":
-            self.model = LoraTransformer(patch_size=16, embed_dim=192, depth=12, num_heads=3,
+            self.model = MoSATransformer(patch_size=16, embed_dim=192, depth=12, num_heads=3,
                                          in_chans=self.num_input_channels, num_classes=num_targets, rank=rank)
         else:
             raise NotImplementedError
