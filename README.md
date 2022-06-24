@@ -15,13 +15,11 @@ After pipenv installation:
 ## Running adaptation scripts (using pre-trained model)
 
 ### Get Model
-`wget <gdrive_link>`
 
-`mkdir examples/adaptation/checkpoints`
-
-`mv vit_tiny_split_73140_steps.pth  examples/adaptation/checkpoints`
+Run: `sh get_pretrained_model.sh`
 
 ### Run Script
+
 For Full model finetuning: `make scene_transfer_full_finetune`
 
 For partial model finetuning (last layers): `make scene_transfer_partial_finetune`
@@ -32,6 +30,7 @@ For motion style adapters (ours): `make scene_transfer_mosa`
 
  
 ## Model Pre-training (takes 1 day)
+
 `make pretrain_l5kit`
 
 Note: Larger batchsize speeds up the training process.
