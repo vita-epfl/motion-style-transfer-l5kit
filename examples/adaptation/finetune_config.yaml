@@ -89,7 +89,7 @@ train_params:
 ## Finetune params
 finetune_params:
   lr: 5.0E-4
-  model_path: "examples/dro/checkpoints/vit_tiny_split_73140_steps.pth"
+  model_path: "examples/adaptation/checkpoints/vit_tiny_split_73140_steps.pth"
   strategy: "all"
   output_name: "ft_batches"
   layer_num: 11
