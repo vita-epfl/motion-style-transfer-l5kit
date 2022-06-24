@@ -201,8 +201,8 @@ for epoch in range(start_epoch, train_cfg['epochs']):
     # Eval
     if (epoch + 1) % cfg["train_params"]["eval_every_n_epochs"] == 0:
         print("Evaluating............................................")
-        eval_model(model, eval_dataset, logger, "eval", total_steps, num_scenes_to_unroll,
-                   enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path)
+        _, _ = eval_model(model, eval_dataset, logger, "eval", total_steps, num_scenes_to_unroll,
+                          enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path)
         model.train()
 
     # Checkpoint
@@ -225,14 +225,14 @@ print("Saved model")
 
 # Eval (training format)
 print("Train waala Eval")
-eval_model(model, eval_dataset, logger, "eval", total_steps, num_scenes_to_unroll,
-           enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path)
+_, _ = eval_model(model, eval_dataset, logger, "eval", total_steps, num_scenes_to_unroll,
+                  enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path)
 
 
 print("Starting Final Evaluation")
 # Final Eval (Eval format)
 start = time.time()
-eval_model(model, eval_dataset, logger, "eval", total_steps + 10, num_scenes_to_unroll=4000,
-           enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path)
+_, _ = eval_model(model, eval_dataset, logger, "eval", total_steps + 10, num_scenes_to_unroll=4000,
+                  enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path)
 print("Evaluation Time: ", time.time() - start)
 print(" Done Done ")

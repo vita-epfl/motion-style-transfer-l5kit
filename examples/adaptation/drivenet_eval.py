@@ -105,3 +105,4 @@ def eval_model(model: torch.nn.Module, dataset: EgoDataset, logger: Logger, d_se
     torch.set_grad_enabled(True)
 
     model = torch.nn.DataParallel(model)
+    return ade, fde

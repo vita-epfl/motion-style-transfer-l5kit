@@ -360,13 +360,6 @@ def main():
     else:
         logger = utils.configure_logger(0, "/opt/ml/checkpoints/drivenet_logs", output_name, True)
 
-    # Init Eval
-    # start = time.time()
-    # eval_model(model, eval_dataset, logger, "eval", iter_num=0, num_scenes_to_unroll=4000,
-    #            enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path,
-    #            filter_type=filter_type)
-    # print("Evaluation Time: ", time.time() - start)
-
     # Train
     model.train()
     torch.set_grad_enabled(True)
@@ -375,6 +368,11 @@ def main():
     #     print(name, param.requires_grad)
     # exit()
     total_steps = 0
+    best_val_fde = 999999
+    final_test_ade = 99999
+    final_test_fde = 99999
+    strategy = cfg["finetune_params"]["strategy"]
+
     for epoch in range(train_cfg['epochs']):
         print(epoch , "/", train_cfg['epochs'])
         for data in tqdm(train_dataloader):
@@ -395,36 +393,35 @@ def main():
         # Eval
         if (epoch + 1) % cfg["train_params"]["eval_every_n_epochs"] == 0:
             print("Evaluating............................................")
-            eval_model(model, eval_dataset, logger, "val", total_steps, num_scenes_to_unroll,
-                    enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path,
-                    filter_type=filter_type, start_scene_id=0)
-            eval_model(model, eval_dataset, logger, "test", total_steps, num_scenes_to_unroll,
-                    enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path,
-                    filter_type=filter_type, start_scene_id=num_scenes_to_unroll)
+            _, val_fde = eval_model(model, eval_dataset, logger, "val", total_steps, num_scenes_to_unroll,
+                        enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path,
+                        filter_type=filter_type, start_scene_id=num_scenes_to_unroll)
+            # Uncomment for test ADE , FDE at eval_every_n_epochs
+            # test_ade, test_fde = eval_model(model, eval_dataset, logger, "test", total_steps, num_scenes_to_unroll,
+            #         enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path,
+            #         filter_type=filter_type, start_scene_id=0)
+
+            if val_fde < best_val_fde:
+                print("Got new best model")
+                best_val_fde = val_fde
+                print(f"Saving Best Model, output_name: {output_name}_{strategy}_best_model.pth")
+                path_to_save = str(save_path / f"{output_name}_{strategy}_best_model.pth")
+                torch.save(model.module.state_dict(), path_to_save)
+
             model.train()
 
-    print("Saving model")
-    # Final Checkpoint
-    path_to_save = str(save_path / f"{output_name}_{total_steps}_steps.pth")
-    torch.save(model.module.state_dict(), path_to_save)
-    # torch.save(model.cpu(), path_to_save)
-    # model = model.to(device)
-    print("Saved model")
-
-    # Eval (training format)
-    # print("Train waala Eval")
-    # eval_model(model, eval_dataset, logger, "eval", total_steps, num_scenes_to_unroll,
-    #         enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path)
-
-
-    # print("Starting Final Evaluation")
-    # # Final Eval (Eval format)
-    # start = time.time()
-    # eval_model(model, eval_dataset, logger, "eval", total_steps + 10, num_scenes_to_unroll=4000,
-    #            enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path,
-    #            filter_type=filter_type)
-    # print("Evaluation Time: ", time.time() - start)
-    # print(" Done Done ")
+    # Load Best Model
+    # Get test ade, fde
+    print("Calculating Test Metrics")
+    best_checkpoint = torch.load(str(save_path / f"{output_name}_{strategy}_best_model.pth"))
+    model.module.load_state_dict(best_checkpoint)
+    test_ade, test_fde = eval_model(model, eval_dataset, logger, "test", total_steps, num_scenes_to_unroll,
+            enable_scene_type_aggregation=True, scene_id_to_type_path=scene_id_to_type_val_path,
+            filter_type=filter_type)
+    final_test_ade = test_ade
+    final_test_fde = test_fde
+    print("Test ADE: ", final_test_ade)
+    print("Test fDE: ", final_test_fde)
 
 if __name__ == "__main__":
     main()
