@@ -7,11 +7,11 @@ from l5kit import __version__
 setup(
     name="l5kit",
     version=__version__,
-    description="Level-5 Autonomous Vehicle Research library",
-    author="Level 5",
-    author_email="l5kit@lyft.com",
-    url="https://github.com/woven-planet/l5kit",
-    license="apache2",
+    description="XXXX",
+    author="XXXX",
+    author_email="XXXX",
+    url="XXXX",
+    license="XXXX",
     install_requires=[
         "imageio",
         "matplotlib",
