@@ -209,12 +209,13 @@ for epoch in range(start_epoch, train_cfg['epochs']):
     if (epoch + 1) % cfg["train_params"]["checkpoint_every_n_epochs"] == 0:
         print("Saving............................................")
         path_to_save = str(save_path / f"{output_name}_{total_steps}_steps.pth")
-        torch.save({
-                    'epoch': epoch + 1,
-                    'model_state_dict': model.module.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'scheduler_state_dict': scheduler.state_dict(),
-                    }, path_to_save)
+        torch.save(model.module.state_dict(), path_to_save)
+        # torch.save({
+        #             'epoch': epoch + 1,
+        #             'model_state_dict': model.module.state_dict(),
+        #             'optimizer_state_dict': optimizer.state_dict(),
+        #             'scheduler_state_dict': scheduler.state_dict(),
+        #             }, path_to_save)
 
 
 print("Saving model")
