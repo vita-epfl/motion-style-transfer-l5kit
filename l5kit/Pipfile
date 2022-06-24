@@ -15,7 +15,6 @@ pre-commit = "*"
 importlib-metadata = "*"  # required for python 3.8
 typing-extensions = "*"
 types-pyyaml = "*"
-l5kit = {editable = true, path = "."}
 
 [packages]
 l5kit = {editable = true, path = "."}
@@ -40,3 +39,4 @@ bokeh = "*"
 sphinx-press-theme = "*"
 types-pyyaml = "*"
 stable-baselines3 = {extras = ["extra"], version = "*"}
+loralib = "*"
