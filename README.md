@@ -1,4 +1,4 @@
-Scripts for reproducing Scene Style Transfer experiment on Level 5 Prediction Dataset.
+**Scripts for reproducing Scene Style Transfer experiment on Level 5 Prediction Dataset.**
 
 ## Setup
 
@@ -10,7 +10,15 @@ After pipenv installation:
 
 `pipenv install --dev -e .`
 
+`pipenv shell`
+
 `cd ..`
+
+
+## Data Download
+
+Due to License issues, we cannot provide data from the L5Kit dataset. Please follow the instructions from the L5Kit authors for downloading and setting the path to data directory. 
+
 
 ## Running adaptation scripts (using pre-trained model)
 
