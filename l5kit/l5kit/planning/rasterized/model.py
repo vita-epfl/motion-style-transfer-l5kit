@@ -68,6 +68,8 @@ class RasterizedPlanningModel(nn.Module):
         outputs = self.model(image_batch)
         batch_size = len(data_batch["image"])
 
+        # Input Size: BS x N_C x H x W
+        # Output Size: BS x (3 * T_S); 3 --> X, Y, Yaw
         if self.training:
             if self.criterion is None:
                 raise NotImplementedError("Loss function is undefined.")
